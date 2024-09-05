@@ -1,0 +1,222 @@
+{
+  "type": "component",
+  "metadata": {},
+  "schema": {
+    "name": "bb-component-SuperForm",
+    "friendlyName": "Super Form",
+    "description": "A Form component for Budibase",
+    "styles": ["border", "background"],
+    "icon": "Form",
+    "block": true,
+    "ejectable": false,
+    "hasChildren": true,
+    "showEmptyState": false,
+    "context": [
+      {
+        "type": "form"
+      },
+      {
+        "type": "static",
+        "scope": "global",
+        "values": [
+          {
+            "label": "rows",
+            "key": "rows",
+            "type": "array"
+          }
+        ]
+      }
+    ],
+    "settings": [
+      {
+        "type": "schema",
+        "key": "dataSource",
+        "label": "Schema",
+        "defaultValue": {
+          "name": "Custom",
+          "label": "Custom"
+        }
+      },
+      {
+        "type": "select",
+        "key": "formType",
+        "label": "Form Type",
+        "defaultValue": "simple",
+        "showInBar": true,
+        "options": [
+          { "label": "Single Row", "value": "simple" },
+          { "label": "Multi Row", "value": "multiRow" },
+          { "label": "Multi Step", "value": "multiStep" }
+        ]
+      },
+      {
+        "type": "select",
+        "key": "actionType",
+        "label": "Action Type",
+        "defaultValue": "create",
+        "showInBar": true,
+        "options": [
+          { "label": "View", "value": "view" },
+          { "label": "Create", "value": "create" },
+          { "label": "Update", "value": "update" }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Single Row Settings",
+        "dependsOn": {
+          "setting": "formType",
+          "value": "multiRow",
+          "invert": true
+        },
+        "settings": [
+          {
+            "type": "number",
+            "key": "formColumns",
+            "label": "Columns",
+            "dependsOn": {
+              "setting": "formType",
+              "value": "multiRow",
+              "invert": true
+            },
+            "defaultValue": 2
+          },
+          {
+            "type": "text",
+            "key": "rowId",
+            "label": "Row ID",
+            "dependsOn": {
+              "setting": "actionType",
+              "value": "create",
+              "invert": true
+            }
+          },
+          {
+            "type": "text",
+            "key": "row",
+            "label": "Row",
+            "dependsOn": {
+              "setting": "actionType",
+              "value": "create",
+              "invert": true
+            }
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Multi Row Settings",
+        "dependsOn": { "setting": "formType", "value": "multiRow" },
+        "settings": [
+          {
+            "type": "filter",
+            "key": "filter",
+            "label": "Filter",
+            "resetOn": "formType",
+            "dependsOn": {
+              "setting": "actionType",
+              "value": "create",
+              "invert": true
+            }
+          },
+          {
+            "type": "number",
+            "key": "limit",
+            "label": "Limit",
+            "defaultValue": 10,
+            "min": 1,
+            "dependsOn": {
+              "setting": "actionType",
+              "value": "create",
+              "invert": true
+            }
+          },
+          {
+            "type": "number",
+            "key": "minRows",
+            "label": "Min Rows",
+            "dependsOn": { "setting": "actionType", "value": "create" },
+            "defaultValue": 1,
+            "min": 1
+          },
+          {
+            "type": "number",
+            "key": "maxRows",
+            "label": "Max Rows",
+            "dependsOn": {
+              "setting": "actionType",
+              "value": "view",
+              "invert": true
+            },
+            "defaultValue": 0
+          },
+          {
+            "type": "text",
+            "key": "data",
+            "label": "Rows",
+            "dependsOn": {
+              "setting": "actionType",
+              "value": "create",
+              "invert": true
+            },
+            "info": "Point to an Array of Rows"
+          },
+          {
+            "type": "boolean",
+            "key": "canAdd",
+            "label": "Add Row",
+            "defaultValue": true
+          },
+          {
+            "type": "boolean",
+            "key": "canDelete",
+            "label": "Delete Row",
+            "defaultValue": true
+          },
+          {
+            "type": "boolean",
+            "key": "batchMode",
+            "label": "Batch Mode",
+            "defaultValue": false
+          },
+          {
+            "type": "boolean",
+            "key": "autoSave",
+            "label": "Auto Save",
+            "defaultValue": false,
+            "dependsOn": { "setting": "batchMode", "value": false }
+          },
+          {
+            "type": "event",
+            "key": "onRowSave",
+            "label": "On Row Save",
+            "nested": true,
+            "dependsOn": { "setting": "batchMode", "value": false }
+          },
+          {
+            "type": "event",
+            "key": "onBatchSave",
+            "label": "On Batch Save",
+            "dependsOn": { "setting": "batchMode", "value": true }
+          },
+          {
+            "type": "event",
+            "key": "onRowDelete",
+            "label": "On Row Delete",
+            "dependsOn": { "setting": "batchMode", "value": false }
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Form Fields",
+        "settings": [
+          {
+            "type": "fieldConfiguration",
+            "key": "fields"
+          }
+        ]
+      }
+    ]
+  }
+}
