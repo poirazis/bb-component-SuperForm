@@ -5,29 +5,45 @@
     "name": "bb-component-SuperForm",
     "friendlyName": "Super Form",
     "description": "A Form component for Budibase",
-    "styles": ["border", "background"],
+    "styles": ["padding", "border", "background"],
     "icon": "Form",
     "block": true,
     "ejectable": false,
     "hasChildren": true,
     "showEmptyState": false,
+    "actions": ["ValidateForm", "ClearForm", "UpdateFieldValue", "ScrollTo"],
     "context": [
       {
         "type": "form"
+      },
+      {
+        "type": "schema"
       },
       {
         "type": "static",
         "scope": "global",
         "values": [
           {
-            "label": "rows",
+            "label": "New Rows",
             "key": "rows",
+            "type": "array"
+          },
+          {
+            "label": "Existing Rows",
+            "key": "existingRows",
             "type": "array"
           }
         ]
       }
     ],
     "settings": [
+      {
+        "type": "text",
+        "key": "formTitle",
+        "label": "Title",
+        "placeholder": "Auto",
+        "nested": true
+      },
       {
         "type": "schema",
         "key": "dataSource",
@@ -36,18 +52,6 @@
           "name": "Custom",
           "label": "Custom"
         }
-      },
-      {
-        "type": "select",
-        "key": "formType",
-        "label": "Form Type",
-        "defaultValue": "simple",
-        "showInBar": true,
-        "options": [
-          { "label": "Single Row", "value": "simple" },
-          { "label": "Multi Row", "value": "multiRow" },
-          { "label": "Multi Step", "value": "multiStep" }
-        ]
       },
       {
         "type": "select",
@@ -62,62 +66,69 @@
         ]
       },
       {
-        "section": true,
-        "name": "Single Row Settings",
+        "type": "boolean",
+        "key": "multiRow",
+        "label": "Multi Row",
+        "showInBar": true,
+        "barIcon": "ViewRow",
+        "license": false
+      },
+      {
+        "type": "boolean",
+        "key": "disabled",
+        "label": "Disabled"
+      },
+      {
+        "type": "boolean",
+        "key": "canEdit",
+        "label": "Can Edit",
+        "resetOn": "actionType",
+        "dependsOn": { "setting": "actionType", "value": "view" }
+      },
+      {
+        "type": "boolean",
+        "key": "canDelete",
+        "label": "Can Delete",
         "dependsOn": {
-          "setting": "formType",
-          "value": "multiRow",
+          "setting": "actionType",
+          "value": "create",
           "invert": true
-        },
-        "settings": [
-          {
-            "type": "number",
-            "key": "formColumns",
-            "label": "Columns",
-            "dependsOn": {
-              "setting": "formType",
-              "value": "multiRow",
-              "invert": true
-            },
-            "defaultValue": 2
-          },
-          {
-            "type": "text",
-            "key": "rowId",
-            "label": "Row ID",
-            "dependsOn": {
-              "setting": "actionType",
-              "value": "create",
-              "invert": true
-            }
-          },
-          {
-            "type": "text",
-            "key": "row",
-            "label": "Row",
-            "dependsOn": {
-              "setting": "actionType",
-              "value": "create",
-              "invert": true
-            }
-          }
-        ]
+        }
+      },
+      {
+        "type": "boolean",
+        "key": "groupJSON",
+        "label": "Group JSON"
+      },
+      {
+        "type": "boolean",
+        "key": "canAdd",
+        "label": "Can Add New",
+        "defaultValue": true,
+        "dependsOn": "multiRow"
+      },
+      {
+        "type": "number",
+        "key": "formColumns",
+        "label": "Columns",
+        "min": 1,
+        "defaultValue": 2
       },
       {
         "section": true,
-        "name": "Multi Row Settings",
-        "dependsOn": { "setting": "formType", "value": "multiRow" },
+        "name": "Initial Data",
+        "dependsOn": {
+          "setting": "actionType",
+          "value": "create",
+          "invert": true
+        },
         "settings": [
           {
             "type": "filter",
             "key": "filter",
             "label": "Filter",
-            "resetOn": "formType",
-            "dependsOn": {
-              "setting": "actionType",
-              "value": "create",
-              "invert": true
-            }
+            "resetOn": "multiRow",
+            "dependsOn": "multiRow"
           },
           {
             "type": "number",
@@ -125,19 +136,144 @@
             "label": "Limit",
             "defaultValue": 10,
             "min": 1,
+            "dependsOn": "multiRow"
+          },
+          {
+            "type": "text",
+            "key": "data",
+            "label": "Rows",
+            "dependsOn": "multiRow",
+            "info": "Point to an Array of Rows"
+          },
+          {
+            "type": "text",
+            "key": "rowId",
+            "label": "Row ID",
             "dependsOn": {
-              "setting": "actionType",
-              "value": "create",
+              "setting": "multiRow",
+              "value": true,
               "invert": true
             }
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Single Row Settings",
+        "dependsOn": {
+          "setting": "multiRow",
+          "value": true,
+          "invert": true
+        },
+        "settings": [
+          {
+            "type": "select",
+            "key": "singleRowActionsMode",
+            "label": "Actions Mode",
+            "defaultValue": "direct",
+            "options": [
+              { "label": "Auto", "value": "direct" },
+              { "label": "Event", "value": "event" }
+            ]
+          },
+          {
+            "type": "boolean",
+            "key": "defaultNotifications",
+            "label": "Notifications",
+            "defaultValue": false,
+            "dependsOn": {
+              "setting": "singleRowActionsMode",
+              "value": "direct"
+            }
+          },
+          {
+            "type": "boolean",
+            "key": "requireConfirmation",
+            "label": "Confirmation",
+            "defaultValue": false,
+            "dependsOn": {
+              "setting": "singleRowActionsMode",
+              "value": "direct"
+            }
+          },
+          {
+            "type": "boolean",
+            "key": "singleCanReset",
+            "label": "Clear Button",
+            "defaultValue": true,
+            "dependsOn": { "setting": "actionType", "value": "create" }
+          },
+          {
+            "type": "event",
+            "key": "onSingleRowSave",
+            "label": "On Save",
+            "nested": true,
+            "dependsOn": { "setting": "singleRowActionsMode", "value": "event" }
+          },
+          {
+            "type": "event",
+            "key": "afterSingleRowSave",
+            "label": "After Save",
+            "nested": true,
+            "dependsOn": {
+              "setting": "singleRowActionsMode",
+              "value": "direct"
+            }
+          },
+          {
+            "type": "event",
+            "key": "onSingleRowDelete",
+            "label": "On Delete",
+            "dependsOn": {
+              "setting": "singleRowActionsMode",
+              "value": "event"
+            },
+            "nested": true
+          },
+          {
+            "type": "event",
+            "key": "afterSingleRowDelete",
+            "label": "After Delete",
+            "dependsOn": {
+              "setting": "singleRowActionsMode",
+              "value": "direct"
+            },
+            "nested": true
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Multi Row Settings",
+        "dependsOn": "multiRow",
+        "settings": [
+          {
+            "type": "boolean",
+            "key": "simpleRows",
+            "label": "Simple Rows"
+          },
+          {
+            "type": "select",
+            "key": "actionsMode",
+            "label": "Actions Mode",
+            "defaultValue": "batch",
+            "options": [
+              { "label": "Batch", "value": "batch" },
+              { "label": "Direct", "value": "direct" },
+              { "label": "Event", "value": "event" }
+            ]
           },
           {
             "type": "number",
             "key": "minRows",
             "label": "Min Rows",
-            "dependsOn": { "setting": "actionType", "value": "create" },
+            "dependsOn": {
+              "setting": "actionType",
+              "value": "view",
+              "invert": true
+            },
             "defaultValue": 1,
-            "min": 1
+            "min": 0
           },
           {
             "type": "number",
@@ -148,62 +284,48 @@
               "value": "view",
               "invert": true
             },
-            "defaultValue": 0
-          },
-          {
-            "type": "text",
-            "key": "data",
-            "label": "Rows",
-            "dependsOn": {
-              "setting": "actionType",
-              "value": "create",
-              "invert": true
-            },
-            "info": "Point to an Array of Rows"
+            "defaultValue": 0,
+            "min": 0
           },
           {
             "type": "boolean",
-            "key": "canAdd",
-            "label": "Add Row",
+            "key": "numbering",
+            "label": "Numbering",
             "defaultValue": true
-          },
-          {
-            "type": "boolean",
-            "key": "canDelete",
-            "label": "Delete Row",
-            "defaultValue": true
-          },
-          {
-            "type": "boolean",
-            "key": "batchMode",
-            "label": "Batch Mode",
-            "defaultValue": false
-          },
-          {
-            "type": "boolean",
-            "key": "autoSave",
-            "label": "Auto Save",
-            "defaultValue": false,
-            "dependsOn": { "setting": "batchMode", "value": false }
           },
           {
             "type": "event",
             "key": "onRowSave",
             "label": "On Row Save",
             "nested": true,
-            "dependsOn": { "setting": "batchMode", "value": false }
-          },
-          {
-            "type": "event",
-            "key": "onBatchSave",
-            "label": "On Batch Save",
-            "dependsOn": { "setting": "batchMode", "value": true }
+            "dependsOn": {
+              "setting": "actionsMode",
+              "value": "event"
+            }
           },
           {
             "type": "event",
             "key": "onRowDelete",
             "label": "On Row Delete",
-            "dependsOn": { "setting": "batchMode", "value": false }
+            "nested": true,
+            "dependsOn": {
+              "setting": "actionsMode",
+              "value": "event"
+            }
+          },
+          {
+            "type": "event",
+            "key": "onBatchSave",
+            "label": "On Batch Save",
+            "dependsOn": { "setting": "actionsMode", "value": "batch" }
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "rowActionButtons",
+            "label": "Row Buttons",
+            "nested": true,
+            "wide": true,
+            "dependsOn": { "setting": "actionType", "value": "view" }
           }
         ]
       },
@@ -213,7 +335,9 @@
         "settings": [
           {
             "type": "fieldConfiguration",
-            "key": "fields"
+            "nested": true,
+            "key": "fields",
+            "resetOn": "dataSource"
           }
         ]
       }

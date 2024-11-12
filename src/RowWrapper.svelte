@@ -1,43 +1,56 @@
 <script>
   import { getContext, createEventDispatcher } from "svelte";
+  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
   const form = getContext("form");
-  const { memo } = getContext("sdk");
+  const { enrichButtonActions, memo } = getContext("sdk");
+  const allContext = getContext("context");
 
   const dispatch = createEventDispatcher();
 
-  export let formObject = form;
+  export const formObject = form;
+
+  export let isValid = false;
+  export let isDirty = false;
+
   export let index;
-  export let isValid = true;
-  export let isDirty;
+
   export let isNew;
+  export let disabled;
   export let isDeleted;
   export let fieldsLength;
-  export let batchMode;
-  export let autoSave;
+  export let actionsMode;
+
   export let canDelete;
+  export let canAdd;
+  export let multiRow;
+  export let rowActionButtons;
+  export let numbering;
+  export let inView;
+
+  export let comp_id;
+  export let row;
 
   let valuesStore;
-  let initalized = isNew;
   let hover;
+  let initialized = isNew;
 
-  let formState = form.formState;
-  let unsubscribe = formState.subscribe((value) => {
+  let unsubscribe = form.formState.subscribe((value) => {
     if (!valuesStore && !isEmpty(value.values)) {
       valuesStore = memo(value.values);
       return;
     }
-    isValid = value.valid;
     if (!isEmpty(value.values)) {
-      initalized = true;
       valuesStore.set(value.values);
+      initialized = true;
+      isValid = value.valid;
     }
   });
 
   $: valuesChanged($valuesStore);
 
-  const valuesChanged = (values) => {
-    if (!isEmpty(values) && initalized) {
-      isDirty = false;
+  const valuesChanged = (values, init) => {
+    if (!isEmpty(values) && !isDeleted && initialized) {
+      isDirty = true;
       dispatch("valuesChanged", { ...values });
     }
   };
@@ -56,108 +69,104 @@
   const onSave = () => {
     dispatch("save", {});
   };
+
+  const handleRowAction = async (event) => {
+    if (!event) return;
+    let context = {
+      ...$allContext,
+      [comp_id]: { ...row },
+    };
+    let cmd = enrichButtonActions(event, context);
+    await cmd?.();
+  };
 </script>
 
 <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
-<div class="row-wrapper" tabindex="0">
-  <!-- svelte-ignore a11y-mouse-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  {#if index > -1}
-    <div
-      class="row-number"
-      class:isNew
-      class:isValid
-      on:mouseover={() => (hover = true)}
-      on:mouseleave={() => (hover = false)}
-    >
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y-mouse-events-have-key-events -->
+<div
+  class="row-wrapper"
+  class:multiRow
+  class:isDirty={multiRow && isDirty}
+  on:mouseover={() => (hover = true)}
+  on:mouseleave={() => (hover = false)}
+>
+  {#if multiRow}
+    <div class="row-header">
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      {#if rowActionButtons?.length && inView}
+        {#each rowActionButtons as { onClick, ...rest }}
+          <SuperButton
+            {...rest}
+            disabled={!onClick}
+            on:click={handleRowAction(onClick)}
+          />
+        {/each}
+      {/if}
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
       {#if isDeleted}
-        <i
-          class="ri-arrow-go-back-fill"
-          style:color={"var(--spectrum-global-color-gray-800)"}
-          style:cursor={"pointer"}
-          on:mousedown={onDelete}
-        />
-      {:else if isValid == false}
-        <i
-          class="ri-error-warning-fill"
-          style:color={"var(--spectrum-global-color-red-400)"}
-        />
-      {:else if isDirty}
-        <i
-          class="ri-edit-fill"
-          style:color={"var(--spectrum-global-color-yellow-400)"}
-        />
-      {:else if hover && canDelete}
-        <i
-          class="ri-delete-bin-line"
-          style:color={"var(--spectrum-global-color-red-400)"}
-          style:cursor={"pointer"}
-          on:mousedown={onDelete}
-        />
+        <SuperButton icon={"ri-arrow-go-back-fill"} on:click={onDelete} quiet />
       {:else}
-        {index + 1}
+        {#if canDelete}
+          <SuperButton
+            icon={"ri-delete-bin-2-line"}
+            type="warning"
+            size="S"
+            {disabled}
+            fillOnHover
+            quiet
+            on:click={onDelete}
+          />
+        {/if}
+        {#if canAdd}
+          <SuperButton
+            icon={"ri-add-line"}
+            size="S"
+            type="cta"
+            {disabled}
+            fillOnHover
+            quiet
+            on:click={() => dispatch("add-row", {})}
+          />
+        {/if}
+      {/if}
+      {#if actionsMode == "event"}
+        <SuperButton
+          icon={"ri-save-line"}
+          on:click={onSave}
+          emphasized
+          quiet
+          disabled={!isDirty || disabled}
+        />
       {/if}
     </div>
   {/if}
   <slot />
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  {#if !batchMode && !autoSave}
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <div class="actions" on:click={onSave}>
-      <i class="ri-save-line" />
-    </div>
-  {/if}
 </div>
 
 <style>
   .row-wrapper {
     display: flex;
-    justify-content: stretch;
+    flex-direction: column;
     align-items: stretch;
     color: var(--spectrum-global-color-gray-500);
-    gap: 0.25rem;
-  }
-  .row-wrapper:focus {
-    outline: none;
-  }
-  .row-wrapper:focus-within {
-    color: var(--spectrum-global-color-gray-900);
-  }
-  .row-number {
-    min-width: 2rem;
-    max-width: 2rem;
-    flex: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 2px;
-  }
 
-  .actions {
-    line-height: 2rem;
-    min-width: 2.4rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid transparent;
-  }
+    &.multiRow {
+      padding: 0.85rem;
+      border: 1px solid var(--spectrum-global-color-gray-300);
 
-  .actions:hover {
-    background-color: var(--spectrum-global-color-gray-50);
-    border: 1px solid var(--spectrum-global-color-gray-200);
-    border-radius: 4px;
-    cursor: pointer;
-    color: var(--primaryColor);
+      &:focus-within {
+        border: 1px solid var(--spectrum-global-color-gray-400);
+      }
+    }
+
+    & > .row-header {
+      display: flex;
+      justify-content: flex-end;
+    }
   }
   .isDirty {
-    border-right: 2px solid var(--spectrum-global-color-orange-400) !important;
-  }
-  .isNew {
-    background-color: var(--spectrum-global-color-blue-100);
-    border-radius: 4px;
-  }
-
-  .row-wrapper:hover {
-    color: var(--spectrum-global-color-gray-800);
+    color: var(--spectrum-global-color-orange-700) !important;
+    border-left: 2px solid var(--spectrum-global-color-orange-400) !important;
   }
 </style>
