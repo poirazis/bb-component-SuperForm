@@ -11,32 +11,86 @@
     "ejectable": false,
     "hasChildren": true,
     "showEmptyState": false,
-    "actions": ["ValidateForm", "ClearForm", "UpdateFieldValue", "ScrollTo"],
+    "actions": [
+      {
+        "type": "ValidateForm"
+      },
+      {
+        "type": "ClearForm"
+      },
+      {
+        "type": "UpdateFieldValue",
+        "suffix": "form"
+      },
+      {
+        "type": "ScrollTo",
+        "suffix": "form"
+      },
+      {
+        "type": "ChangeFormStep",
+        "suffix": "form"
+      },
+      {
+        "type": "RefreshDatasource",
+        "suffix": "provider"
+      }
+    ],
     "context": [
       {
-        "type": "form"
-      },
-      {
-        "type": "schema"
-      },
-      {
         "type": "static",
-        "scope": "global",
         "values": [
           {
-            "label": "New Rows",
+            "label": "Current Row",
+            "key": "currentRow",
+            "type": "object"
+          },
+          {
+            "label": "Rows",
             "key": "rows",
             "type": "array"
           },
           {
-            "label": "Existing Rows",
-            "key": "existingRows",
-            "type": "array"
+            "label": "Value",
+            "key": "__value",
+            "type": "object"
+          },
+          {
+            "label": "Valid",
+            "key": "__valid",
+            "type": "boolean"
+          },
+          {
+            "label": "Dirty",
+            "key": "__dirty",
+            "type": "boolean"
+          },
+          {
+            "label": "Current Step",
+            "key": "__currentStep",
+            "type": "number"
+          },
+          {
+            "label": "Current Step Valid",
+            "key": "__currentStepValid",
+            "type": "boolean"
           }
         ]
+      },
+      {
+        "type": "form",
+        "suffix": "form"
+      },
+      {
+        "type": "schema"
       }
     ],
     "settings": [
+      {
+        "type": "boolean",
+        "key": "nested",
+        "label": "Sub Form",
+        "hidden": true
+      },
       {
         "type": "text",
         "key": "formTitle",
@@ -45,8 +99,51 @@
         "nested": true
       },
       {
+        "type": "text",
+        "key": "formSubtitle",
+        "label": "Subtitle",
+        "nested": true
+      },
+      {
+        "type": "select",
+        "key": "subformType",
+        "label": "Type",
+        "dependsOn": "nested",
+        "resetOn": "nested",
+        "options": [
+          { "label": "Relationship", "value": "link" },
+          { "label": "JSON Column", "value": "json" },
+          { "label": "Embedded Document", "value": "embed" }
+        ],
+        "defaultValue": "link"
+      },
+      {
+        "type": "field/json",
+        "key": "outerField",
+        "label": "Field",
+        "resetOn": ["nested", "subformType"],
+        "dependsOn": {
+          "setting": "subformType",
+          "value": "link",
+          "invert": true
+        }
+      },
+      {
+        "type": "field/link",
+        "key": "outerLinkField",
+        "label": "Field",
+        "resetOn": ["nested", "subformType"],
+        "hidden": true
+      },
+      {
         "type": "schema",
         "key": "dataSource",
+        "resetOn": ["nested", "subformType"],
+        "dependsOn": {
+          "setting": "subformType",
+          "value": "json",
+          "invert": true
+        },
         "label": "Schema",
         "defaultValue": {
           "name": "Custom",
@@ -59,6 +156,11 @@
         "label": "Action Type",
         "defaultValue": "create",
         "showInBar": true,
+        "dependsOn": {
+          "setting": "nested",
+          "value": true,
+          "invert": true
+        },
         "options": [
           { "label": "View", "value": "view" },
           { "label": "Create", "value": "create" },
@@ -66,8 +168,34 @@
         ]
       },
       {
+        "type": "number",
+        "key": "formColumns",
+        "label": "Columns",
+        "min": 1,
+        "defaultValue": 2
+      },
+      {
+        "type": "boolean",
+        "key": "disabled",
+        "label": "Disabled"
+      },
+      {
+        "type": "boolean",
+        "key": "multiStep",
+        "label": "Multi Step",
+        "showInBar": true,
+        "barIcon": "GraphPathing",
+        "license": false,
+        "dependsOn": {
+          "setting": "nested",
+          "value": true,
+          "invert": true
+        }
+      },
+      {
         "type": "boolean",
         "key": "multiRow",
+        "resetOn": ["nested", "subformType"],
         "label": "Multi Row",
         "showInBar": true,
         "barIcon": "ViewRow",
@@ -75,8 +203,9 @@
       },
       {
         "type": "boolean",
-        "key": "disabled",
-        "label": "Disabled"
+        "key": "beautifyLabels",
+        "label": "Beautify Labels",
+        "defaultValue": true
       },
       {
         "type": "boolean",
@@ -89,39 +218,41 @@
         "type": "boolean",
         "key": "canDelete",
         "label": "Can Delete",
-        "dependsOn": {
-          "setting": "actionType",
-          "value": "create",
-          "invert": true
-        }
+        "dependsOn": { "setting": "actionType", "value": "update" }
       },
       {
         "type": "boolean",
-        "key": "groupJSON",
-        "label": "Group JSON"
+        "key": "extendActions",
+        "label": "Extend Actions"
       },
       {
         "type": "boolean",
-        "key": "canAdd",
-        "label": "Can Add New",
-        "defaultValue": true,
-        "dependsOn": "multiRow"
+        "key": "hideDefaultActions",
+        "label": "Hide Default",
+        "dependsOn": "extendActions"
       },
       {
-        "type": "number",
-        "key": "formColumns",
-        "label": "Columns",
-        "min": 1,
-        "defaultValue": 2
+        "type": "buttonConfiguration",
+        "key": "formButtons",
+        "wide": true,
+        "nested": true,
+        "dependsOn": "extendActions"
       },
       {
         "section": true,
         "name": "Initial Data",
-        "dependsOn": {
-          "setting": "actionType",
-          "value": "create",
-          "invert": true
-        },
+        "dependsOn": [
+          {
+            "setting": "actionType",
+            "value": "create",
+            "invert": true
+          },
+          {
+            "setting": "nested",
+            "value": true,
+            "invert": true
+          }
+        ],
         "settings": [
           {
             "type": "filter",
@@ -134,7 +265,7 @@
             "type": "number",
             "key": "limit",
             "label": "Limit",
-            "defaultValue": 10,
+            "defaultValue": 5,
             "min": 1,
             "dependsOn": "multiRow"
           },
@@ -143,12 +274,14 @@
             "key": "data",
             "label": "Rows",
             "dependsOn": "multiRow",
+            "resetOn": ["multiRow"],
             "info": "Point to an Array of Rows"
           },
           {
             "type": "text",
             "key": "rowId",
             "label": "Row ID",
+            "resetOn": ["multiRow"],
             "dependsOn": {
               "setting": "multiRow",
               "value": true,
@@ -159,108 +292,18 @@
       },
       {
         "section": true,
-        "name": "Single Row Settings",
-        "dependsOn": {
-          "setting": "multiRow",
-          "value": true,
-          "invert": true
-        },
-        "settings": [
-          {
-            "type": "select",
-            "key": "singleRowActionsMode",
-            "label": "Actions Mode",
-            "defaultValue": "direct",
-            "options": [
-              { "label": "Auto", "value": "direct" },
-              { "label": "Event", "value": "event" }
-            ]
-          },
-          {
-            "type": "boolean",
-            "key": "defaultNotifications",
-            "label": "Notifications",
-            "defaultValue": false,
-            "dependsOn": {
-              "setting": "singleRowActionsMode",
-              "value": "direct"
-            }
-          },
-          {
-            "type": "boolean",
-            "key": "requireConfirmation",
-            "label": "Confirmation",
-            "defaultValue": false,
-            "dependsOn": {
-              "setting": "singleRowActionsMode",
-              "value": "direct"
-            }
-          },
-          {
-            "type": "boolean",
-            "key": "singleCanReset",
-            "label": "Clear Button",
-            "defaultValue": true,
-            "dependsOn": { "setting": "actionType", "value": "create" }
-          },
-          {
-            "type": "event",
-            "key": "onSingleRowSave",
-            "label": "On Save",
-            "nested": true,
-            "dependsOn": { "setting": "singleRowActionsMode", "value": "event" }
-          },
-          {
-            "type": "event",
-            "key": "afterSingleRowSave",
-            "label": "After Save",
-            "nested": true,
-            "dependsOn": {
-              "setting": "singleRowActionsMode",
-              "value": "direct"
-            }
-          },
-          {
-            "type": "event",
-            "key": "onSingleRowDelete",
-            "label": "On Delete",
-            "dependsOn": {
-              "setting": "singleRowActionsMode",
-              "value": "event"
-            },
-            "nested": true
-          },
-          {
-            "type": "event",
-            "key": "afterSingleRowDelete",
-            "label": "After Delete",
-            "dependsOn": {
-              "setting": "singleRowActionsMode",
-              "value": "direct"
-            },
-            "nested": true
-          }
-        ]
-      },
-      {
-        "section": true,
         "name": "Multi Row Settings",
         "dependsOn": "multiRow",
         "settings": [
-          {
-            "type": "boolean",
-            "key": "simpleRows",
-            "label": "Simple Rows"
-          },
           {
             "type": "select",
             "key": "actionsMode",
             "label": "Actions Mode",
             "defaultValue": "batch",
+            "dependsOn": { "setting": "nested", "value": true, "invert": true },
             "options": [
               { "label": "Batch", "value": "batch" },
-              { "label": "Direct", "value": "direct" },
-              { "label": "Event", "value": "event" }
+              { "label": "Individual", "value": "individual" }
             ]
           },
           {
@@ -289,57 +332,214 @@
           },
           {
             "type": "boolean",
-            "key": "numbering",
-            "label": "Numbering",
-            "defaultValue": true
+            "key": "canAdd",
+            "label": "Can Add",
+            "defaultValue": true,
+            "dependsOn": { "setting": "actionType", "value": "update" }
           },
           {
-            "type": "event",
-            "key": "onRowSave",
-            "label": "On Row Save",
-            "nested": true,
+            "type": "boolean",
+            "key": "canDelete",
+            "label": "Can Delete",
+            "dependsOn": { "setting": "actionType", "value": "update" }
+          },
+          {
+            "type": "boolean",
+            "key": "compact",
+            "label": "Compact",
+            "resetOn": "multiStep",
             "dependsOn": {
-              "setting": "actionsMode",
-              "value": "event"
+              "setting": "multiStep",
+              "value": true,
+              "invert": true
             }
-          },
-          {
-            "type": "event",
-            "key": "onRowDelete",
-            "label": "On Row Delete",
-            "nested": true,
-            "dependsOn": {
-              "setting": "actionsMode",
-              "value": "event"
-            }
-          },
-          {
-            "type": "event",
-            "key": "onBatchSave",
-            "label": "On Batch Save",
-            "dependsOn": { "setting": "actionsMode", "value": "batch" }
           },
           {
             "type": "buttonConfiguration",
             "key": "rowActionButtons",
-            "label": "Row Buttons",
+            "label": "Row Actions",
             "nested": true,
-            "wide": true,
-            "dependsOn": { "setting": "actionType", "value": "view" }
+            "wide": true
           }
         ]
       },
       {
         "section": true,
         "name": "Form Fields",
+        "dependsOn": { "setting": "multiStep", "value": true, "invert": true },
         "settings": [
           {
             "type": "fieldConfiguration",
             "nested": true,
             "key": "fields",
-            "resetOn": "dataSource"
+            "resetOn": ["dataSource"]
           }
         ]
+      },
+      {
+        "section": true,
+        "name": "Form Steps",
+        "dependsOn": "multiStep",
+        "settings": [
+          {
+            "type": "stepConfiguration",
+            "nested": true,
+            "key": "steps",
+            "resetOn": "dataSource",
+            "defaultValue": [{}]
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "nested Options",
+        "dependsOn": "nested",
+        "settings": [
+          {
+            "type": "number",
+            "key": "inStep",
+            "label": "Show in Step",
+            "defaultValue": 1,
+            "min": 1
+          },
+          {
+            "type": "number",
+            "key": "colSpan",
+            "label": "Column Span",
+            "defaultValue": 1
+          },
+          {
+            "type": "number",
+            "key": "rowSpan",
+            "label": "Row Span",
+            "defaultValue": 1
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Events",
+        "dependsOn": {
+          "setting": "hideDefaultActions",
+          "value": true,
+          "invert": true
+        },
+        "settings": [
+          {
+            "type": "event",
+            "key": "afterSave",
+            "label": "After Save",
+            "nested": true
+          },
+          {
+            "type": "event",
+            "key": "afterDelete",
+            "label": "After Delete",
+            "nested": true,
+            "dependsOn": "canDelete"
+          }
+        ]
+      },
+      {
+        "tag": "style",
+        "type": "select",
+        "label": "Label Position",
+        "key": "labelPosition",
+        "showInBar": true,
+        "barStyle": "buttons",
+        "defaultValue": "fieldGroup",
+        "options": [
+          {
+            "label": "Disabled",
+            "value": false,
+            "barIcon": "Cancel",
+            "barTitle": "Disabled"
+          },
+          {
+            "label": "Auto",
+            "value": "fieldGroup",
+            "barIcon": "Group",
+            "barTitle": "Field Group"
+          },
+          {
+            "label": "Above",
+            "value": "above",
+            "barIcon": "MarginTop",
+            "barTitle": "Above"
+          },
+          {
+            "label": "Left",
+            "value": "left",
+            "barIcon": "MarginLeft",
+            "barTitle": "Left"
+          }
+        ]
+      },
+      {
+        "tag": "style",
+        "type": "text",
+        "key": "labelTemplate",
+        "label": "Label Template",
+        "placeholder": "{{ field }}",
+        "nested": true
+      },
+      {
+        "tag": "style",
+        "type": "text",
+        "key": "entitySingular",
+        "label": "Singular Name",
+        "resetOn": ["dataSource"],
+        "placeholder": "row"
+      },
+      {
+        "tag": "style",
+        "type": "text",
+        "key": "entityPlural",
+        "label": "Plural Name",
+        "resetOn": ["dataSource"],
+        "placeholder": "rows"
+      },
+      {
+        "tag": "style",
+        "type": "icon",
+        "key": "titleIcon",
+        "label": "Title Icon",
+        "resetOn": ["dataSource"]
+      },
+      {
+        "tag": "style",
+        "type": "select",
+        "key": "relViewMode",
+        "label": "Relationships",
+        "options": [
+          { "label": "Pills", "value": "pills" },
+          { "label": "Text", "value": "text" }
+        ],
+        "defaultValue": "pills"
+      },
+      {
+        "tag": "style",
+        "type": "select",
+        "key": "optionsViewMode",
+        "label": "Options",
+        "options": [
+          { "label": "Color Text", "value": "colorText" },
+          { "label": "Pills", "value": "pills" },
+          { "label": "Text", "value": "text" }
+        ],
+        "defaultValue": "colorText"
+      },
+      {
+        "tag": "style",
+        "type": "boolean",
+        "key": "quiet",
+        "label": "Quiet"
+      },
+      {
+        "tag": "style",
+        "type": "boolean",
+        "key": "slotFirst",
+        "label": "Slot First"
       }
     ]
   }
