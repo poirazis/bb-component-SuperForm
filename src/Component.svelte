@@ -54,10 +54,8 @@
   export let formTitle;
   export let titleIcon;
   export let formSubtitle;
-  export let entitySingular;
-  export let entityPlural;
   export let nested;
-  export let subformType = true;
+  export let subformType = "link";
   export let extendActions;
   export let formButtons = [];
   export let hideDefaultActions = false;
@@ -98,6 +96,7 @@
   export let outerField;
   export let outerLinkField;
   export let quiet;
+  export let hideIfTrue = false;
 
   // Data Settings
   export let filter;
@@ -112,21 +111,24 @@
   export let labelTemplate;
   export let beautifyLabels = true;
   export let slotFirst;
+  export let entitySingular;
+  export let entityPlural;
 
   // Internal Properties
   let _outerField;
   let _outerLinkField;
   let _subFormType;
-
   let _multiRow = multiRow;
+
   let mounted;
+  let dirty;
 
   let jsonFields = memo([]);
   let embedFields = memo([]);
-
   $: jsonFields.set(getJSONFields(schema));
   $: embedFields.set(getEmbedFields(schema));
 
+  // When acting as a subform
   let outerFormField;
   let outerFieldState;
   let outerFieldApi;
@@ -137,6 +139,7 @@
 
   let loaded;
   let empty;
+  let emptyData;
   let definition;
   let schema;
   let primaryDisplay;
@@ -144,15 +147,16 @@
   let existingRows = [];
   let titleHover;
   let viewToEdit;
-  let activeTab = 0;
+  let activeStep = 0;
 
   let newRowForm = [];
   let existingRowForm = [];
 
+  // Initialize Stores
   const comp_id = $component.id;
   const dataSourceStore = memo(dataSource);
   const formSettings = memo({});
-
+  $: dataSourceStore.set(dataSource);
   $: formSettings.set({
     $dataSourceStore,
     actionType,
@@ -160,53 +164,57 @@
   });
 
   $: _actionType = $outerFormSettings?.actionType ?? actionType;
+  $: missingId = _actionType != "create" && !rowId;
+
+  // Trigger Reinitialization
+  $: superFormApi.init($dataSourceStore, multiRow, minRows);
 
   // Maintain Step while in Builder
   $: inBuilder = $builderStore.inBuilder;
   $: isParent = superFormApi?.subforms?.length;
-  $: activeTab = $builderStore.metadata?.step || 0;
+  $: activeStep = $builderStore.metadata?.step || 0;
   $: if (inBuilder && multiStep) {
-    existingRowForm.forEach((x) => x?.formApi?.setStep(activeTab + 1));
-    newRowForm.forEach((x) => x?.formApi?.setStep(activeTab + 1));
+    existingRowForm.forEach((x) => x?.formApi?.setStep(activeStep + 1));
+    newRowForm.forEach((x) => x?.formApi?.setStep(activeStep + 1));
   }
 
-  $: missingId = outerLinkField
-    ? false
-    : !nested && !inBuilder && _actionType != "create" && !rowId && !multiRow;
-
-  // Initialize DataSourceStore
-  $: dataSourceStore.set(dataSource);
-
   // Keep schema uptodate with Form role and field changes
-  $: superFormApi?.fetchSchema(
-    $dataSourceStore,
-    outerField,
-    outerLinkField,
-    multiStep
-  );
+  $: superFormApi?.fetchSchema($dataSourceStore, outerField, outerLinkField);
 
+  // Enrich Form Steps
   $: richSteps = superFormApi.enrichSteps(steps, schema, multiStep);
-  $: empty = richSteps[0]?.fields?.length < 1 && $component.children < 1;
-  $: dirty = rows.filter((row) => row._isDirty).length > 0;
 
-  // Data Loading Management
+  // Fetch and load initial data
   $: query = QueryUtils.buildQuery(filter);
   $: fetch = superFormApi.createFetch(
     $dataSourceStore,
-    rowId,
-    _actionType,
     outerLinkField,
-    multiRow
+    multiRow,
+    _actionType,
+    rowId
   );
 
-  // Load fetched
-  $: superFormApi.getInitialData($fetch, _actionType, data);
+  $: superFormApi.getInitialData($fetch);
 
+  $: empty =
+    loaded && richSteps[0]?.fields?.length < 1 && $component.children < 1;
+
+  $: dirty = rows.filter((row) => row._isDirty).length > 0;
+
+  $: valid = rows.filter((row) => row._isValid == false).length < 1;
+
+  // If we are a nested form of a multi step form and designated to appear on a specific step.
+  $: visible =
+    hideIfTrue !== true &&
+    hideIfTrue !== "true" &&
+    ($outerFormSettings?.multiStep && outerFormStep
+      ? $outerFormStep == inStep
+      : true);
+
+  // Data Loading Management
   $: batchMode =
     actionsMode == "batch" && _actionType != "view" && !outerLinkField;
   $: eventMode = actionsMode == "individual";
-
-  $: superFormApi.init(multiRow, minRows, rowId, _actionType);
 
   $: canAddRows =
     (_actionType == "update" && canAdd && multiRow) ||
@@ -215,14 +223,10 @@
 
   $: enrichedFormTitle = superFormApi.enrichFormTitle(
     formTitle,
-    beautifyLabels,
-    _actionType,
-    $dataSourceStore,
-    nested,
-    outerField,
-    subformType,
-    existingRows,
-    loaded
+    $formSettings,
+    loaded,
+    emptyData,
+    $fetch
   );
 
   /** The Super Form API
@@ -244,9 +248,15 @@
             : [{}]
           : [];
     },
-    fetchSchema: async (dataSource) => {
+    async fetchSchema(dataSource) {
       schema = undefined;
       loaded = false;
+
+      if (nested && subformType == "link" && dataSource?.type !== "link") {
+        schema = {};
+        loaded = true;
+        return;
+      }
 
       if (dataSource?.name != "Custom" || subformType != "json") {
         if (dataSource.schema || dataSource.type == "viewV2") {
@@ -268,7 +278,7 @@
 
       if (_outerLinkField || outerField)
         await superFormApi.fetchSchemaForField();
-      loaded = true;
+      else if (_actionType == "create") loaded = true;
     },
     fetchSchemaForField: async (field) => {
       // if we are dealing with a field, get schema from parent form field definition
@@ -311,6 +321,7 @@
             }
           } else {
             if (_actionType != "create") {
+              console.log(outerFieldValue);
               existingRows[0] = {
                 ...outerFieldValue,
                 type: "row",
@@ -318,12 +329,14 @@
               };
             }
           }
+
+          emptyData = _actionType != "create" && existingRows?.length < 1;
         } else if (outerFieldSchema?.type == "link") {
           _multiRow =
             outerFieldSchema.relationshipType == "many-to-many" &&
             multiRow !== false;
         }
-        // Keep action Type in synch with Parent Form
+
         loaded = true;
       }
     },
@@ -532,80 +545,100 @@
         });
     },
     createFetch: (datasource) => {
-      if (
-        _actionType != "create" &&
-        (rowId || inBuilder || multiRow || outerLinkField)
-      )
-        if (rowId)
-          return fetchData({
-            API,
-            datasource,
-            options: {
-              query: {
-                equal: {
-                  _id: rowId,
-                },
+      if (_actionType == "create") return;
+      if (missingId && !inBuilder && !multiRow) return;
+
+      if (multiRow || (inBuilder && missingId) || outerLinkField)
+        return fetchData({
+          API,
+          datasource,
+          options: {
+            query,
+            limit: outerLinkField ? 1000 : multiRow ? limit : 1,
+          },
+        });
+
+      if (!multiRow && !missingId && !fetch)
+        return fetchData({
+          API,
+          datasource,
+          options: {
+            query: {
+              equal: {
+                _id: rowId,
               },
             },
-          });
-        else
-          return fetchData({
-            API,
-            datasource,
-            options: {
-              query,
-              limit: outerLinkField ? 1000 : multiRow ? limit : 1,
+          },
+        });
+
+      if (!multiRow && rowId && fetch) {
+        fetch?.update?.({
+          query: {
+            equal: {
+              _id: rowId,
             },
-          });
-      else return memo({ loading: true });
+          },
+        });
+        return fetch;
+      }
+
+      return;
     },
-    getInitialData: (res, type, data) => {
-      if (outerField) return;
+    getInitialData: (res) => {
       if (res?.loading) return;
 
-      if (type == "create") {
-        existingRows = [];
+      if (outerField) {
         return;
       }
 
       if (multiRow && data) {
         existingRows = safeParse(data);
-      } else if (res?.loaded) {
-        existingRows = res.rows;
+      } else {
+        existingRows = res?.rows ?? [];
       }
 
       if (outerLinkField && res?.rows.length < 1) rows = [{}];
+
+      emptyData = _actionType != "create" && existingRows?.length < 1;
+      loaded = true;
     },
     enrichFormTitle: (titleTemplate) => {
-      let activeRow = existingRows[0];
+      if (!loaded) return;
+
+      let activeRow = existingRows?.length ? existingRows[0] : {};
       let context = {
         ...$allContext,
         [comp_id]: { ...activeRow },
       };
 
       let actionName = _actionType[0].toUpperCase() + _actionType.substr(1);
+      let title;
 
-      if (nested)
-        return titleTemplate
+      if (nested) {
+        title = titleTemplate
           ? processStringSync(titleTemplate, context)
           : beautifyLabels
-            ? beautifyLabel(outerField || $dataSourceStore.fieldName)
-            : outerField || $dataSourceStore.fieldName;
+            ? beautifyLabel(
+                outerField || outerLinkField || $dataSourceStore.fieldName
+              )
+            : outerField || outerLinkField || $dataSourceStore.fieldName;
+      } else {
+        title = titleTemplate
+          ? processStringSync(titleTemplate, context)
+          : _actionType != "create" && !multiRow
+            ? activeRow?.[primaryDisplay]
+              ? activeRow[primaryDisplay]
+              : $dataSourceStore.label
+            : actionName +
+              " " +
+              (multiRow
+                ? entityPlural || beautifyLabel($dataSourceStore.label)
+                : entitySingular || beautifyLabel($dataSourceStore.label));
+      }
 
-      return titleTemplate
-        ? processStringSync(titleTemplate, context)
-        : _actionType != "create" && !multiRow
-          ? activeRow?.[primaryDisplay]
-            ? activeRow[primaryDisplay]
-            : $dataSourceStore.label
-          : actionName +
-            " " +
-            (multiRow
-              ? entityPlural || beautifyLabel($dataSourceStore.label)
-              : entitySingular || beautifyLabel($dataSourceStore.label));
+      return title;
     },
     saveRow: async () => {
-      if (!visible) return;
       if (!superFormApi.validate()) return;
       // Have child Super Forms save themselves first
       for (let i = 0; i < subforms.length; i++) {
@@ -633,8 +666,6 @@
         } else {
           let formState = newRowForm[0]?.formState;
           let newRow = get(formState)?.values;
-
-          console.log(newRow);
 
           const res = await API.saveRow({
             ...newRow,
@@ -669,6 +700,16 @@
           if (res) outerFieldApi.setValue([res["_id"]]);
         }
       }
+
+      // We are managing a JSON fiel
+      if (outerField && visible) {
+        let formState = existingRowForm[0]?.formState;
+        if (_actionType == "create") formState = newRowForm[0].formState;
+        let object = unflattenObject(get(formState)?.values);
+
+        if (subformType == "embed") outerFieldApi.setValue(object);
+        else outerFieldApi.setValue(object[outerField]);
+      }
     },
     validate: () => {
       let res = true;
@@ -687,7 +728,6 @@
       for (let i = 0; i < existingRowForm.length; i++) {
         res = res && existingRowForm[i]?.formApi?.validate();
       }
-
       return res;
     },
     reset: () => {
@@ -708,7 +748,7 @@
       if (idx > -1) subforms = subforms.splice(idx, 1);
     },
   };
-
+  // The array of registered subform instances
   let subforms = [];
 
   const actions = [
@@ -932,6 +972,10 @@
           if (res) {
             newRowForm[i].formApi.reset();
           }
+
+          notificationStore.actions.success(
+            rows.length + " " + entityPlural + " Saved"
+          );
         }
         rows = [{}];
       } else {
@@ -1024,12 +1068,6 @@
     }
   };
 
-  // Act as Form Field
-  $: visible =
-    $outerFormSettings?.multiStep && outerFormStep
-      ? $outerFormStep == inStep
-      : true;
-
   /** Propagate changes to the outform when the form values change */
   const handleValuesChanges = (index, values) => {
     if (outerFieldApi) {
@@ -1055,8 +1093,6 @@
 
   $: if (inBuilder && $component.selected && outerFormSettings && !nested) {
     builderStore.actions.updateProp("nested", true);
-    builderStore.actions.updateProp("subformType", "link");
-    builderStore.actions.updateProp("_instanceName", "Subform");
   }
 
   $: if (
@@ -1067,18 +1103,27 @@
     mounted
   ) {
     builderStore.actions.updateProp("nested", false);
-    builderStore.actions.updateProp("subformType", "link");
     builderStore.actions.updateProp("_instanceName", "New Super Form");
   }
 
   $: if (inBuilder && $component.selected && nested && _outerField) {
     builderStore.actions.updateProp("subformType", _subFormType);
     builderStore.actions.updateProp("outerField", _outerField);
+    builderStore.actions.updateProp(
+      "_instanceName",
+      "Subform JSON " +
+        (subformType == "embed" ? "Embed - " : "Column - ") +
+        _outerField
+    );
     _outerField = undefined;
   }
 
   $: if (inBuilder && $component.selected && nested && _outerLinkField) {
     builderStore.actions.updateProp("outerLinkField", _outerLinkField);
+    builderStore.actions.updateProp(
+      "_instanceName",
+      "Subform Link - " + _outerLinkField
+    );
     _outerLinkField = undefined;
   }
 
@@ -1094,6 +1139,10 @@
         ...$component.styles.normal,
         "grid-column": "span " + colSpan * 6,
         "grid-row": "span " + rowSpan,
+        flex: nested ? "auto" : "none",
+        display: "flex",
+        "align-items": "stretch",
+        display: visible ? "block" : "none",
       },
     };
 
@@ -1124,6 +1173,8 @@
   setContext("super-form-embed", embedFields);
   setContext("super-form-settings", formSettings);
   setContext("super-form-api", superFormApi);
+  $: setContext("field-group", labelPosition);
+  $: setContext("field-group-columns", formColumns);
 
   onMount(() => {
     if (outerFormApi) {
@@ -1133,8 +1184,11 @@
   });
 
   onDestroy(() => {
+    superFormApi?.saveRow();
     outerFormApi?.unregisterSubform(superFormApi);
   });
+
+  $: console.log(visible, existingRows, empty, emptyData, loaded);
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -1145,15 +1199,19 @@
   <Provider
     {actions}
     data={_actionType != "create"
-      ? { ...existingRows[0], rows, existingRows }
+      ? {
+          ...existingRows[0],
+        }
       : {
           ...rows[0],
-          rows,
-          __currentStep: activeTab,
+          __value: rows[0],
+          __currentStep: activeStep,
+          __currentStepValid: valid,
+          __valid: valid,
           __dirty: dirty,
         }}
   />
-  {#if !missingId && visible && loaded && !empty}
+  {#if loaded && !empty && !emptyData}
     {#if richSteps[0]?.fields}
       <div class="super-form" class:form-field={outerForm} class:quiet>
         {#if enrichedFormTitle?.trim?.()}
@@ -1174,7 +1232,7 @@
                 {#if titleIcon || superFormApi.__dirty}
                   <i class={titleIcon || "ri-edit-line"} />
                 {/if}
-                {enrichedFormTitle}
+                {nested ? enrichedFormTitle.toUpperCase() : enrichedFormTitle}
                 {#if canEdit && titleHover && _actionType == "view"}
                   <i class={"ri-pencil-fill"} style="font-size: 16px;" />
                 {/if}
@@ -1182,6 +1240,7 @@
                   <i class={"ri-arrow-go-back-fill"} style="font-size: 16px;" />
                 {/if}
               </span>
+
               {#if formSubtitle}
                 <span class="sub-title">{formSubtitle}</span>
               {/if}
@@ -1201,8 +1260,8 @@
               {#if !nested && $dataSourceStore?.tableId}
                 {#if !hideDefaultActions && _actionType != "view"}
                   {#if multiStep && _actionType == "create"}
-                    {#if richSteps[activeTab]?.buttons}
-                      {#each richSteps[activeTab]?.buttons as button}
+                    {#if richSteps[activeStep]?.buttons}
+                      {#each richSteps[activeStep]?.buttons as button}
                         <SuperButton
                           {...button}
                           on:click={button.text == "Save" && isParent
@@ -1245,7 +1304,6 @@
                       <SuperButton
                         icon="ri-save-line"
                         text="Save"
-                        disabled={!dirty}
                         on:click={handleSave}
                       />
                     {/if}
@@ -1284,14 +1342,15 @@
                 >
                   <RowFormWrapper
                     bind:formObject={existingRowForm[index]}
-                    {comp_id}
                     {row}
+                    {comp_id}
                     {disabled}
                     {multiRow}
                     {richSteps}
                     {actionsMode}
                     {rowActionButtons}
                     {compact}
+                    {quiet}
                     inView={_actionType == "view"}
                     canAdd={index == existingRows.length - 1 &&
                       rows.length < 1 &&
@@ -1301,8 +1360,10 @@
                     on:delete={(e) => handleDelete(index)}
                     on:save={(e) => handleSave(index)}
                     on:add-row={handleAddRow}
-                    on:valuesChanged={(e) =>
-                      handleValuesChanges(index, e.detail)}
+                    on:valuesChanged={(e) => {
+                      dirty = true;
+                      // handleValuesChanges(index, e.detail);
+                    }}
                   >
                     {#each richSteps as step, idx}
                       <BlockComponent
@@ -1329,6 +1390,7 @@
                           {#each step.fields as field, idx}
                             {#if getComponentForField(field) && field.active}
                               <BlockComponent
+                                context={"field_" + idx}
                                 type={getComponentForField(field)}
                                 props={getPropsForField(field, index)}
                                 order={idx}
@@ -1373,8 +1435,10 @@
                 >
                   <RowFormWrapper
                     bind:formObject={newRowForm[index]}
-                    bind:row
+                    {row}
+                    isNew
                     {compact}
+                    {quiet}
                     {disabled}
                     canDelete={index > 0 ||
                       rows.length > 1 ||
@@ -1384,11 +1448,15 @@
                     {multiRow}
                     {richSteps}
                     actionsMode={nested ? "batch" : actionsMode}
-                    on:step-change={(e) => (activeTab = e.detail - 1)}
+                    on:step-change={(e) => (activeStep = e.detail - 1)}
                     on:delete={(e) => handleDelete(index, "new")}
                     on:save={(e) => handleSave(index, "new")}
                     on:add-row={handleAddRow}
                     on:valuesChanged={(e) => {
+                      rows[index] = {
+                        ...rows[index],
+                        ...e.detail,
+                      };
                       handleValuesChanges(index, e.detail);
                     }}
                   >
@@ -1401,9 +1469,9 @@
                           _instanceName: `Step ${idx + 1}`,
                         }}
                       >
-                        {#if richSteps[activeTab]?.desc}
+                        {#if richSteps[activeStep]?.desc}
                           <div class="step-desc">
-                            {richSteps[activeTab].desc}
+                            {richSteps[activeStep].desc}
                           </div>
                         {/if}
                         <div
@@ -1442,14 +1510,14 @@
   {#if loaded && empty && inBuilder}
     <div class="empty">
       {#if !nested}
-        <h2>Welcome to the Super Form</h2>
+        <h3>Welcome to the Super Form</h3>
         <div class="message">
           <i class="ri-information-line" />
-          Please Select or Add some Fields to get Started
+          Please add some Fields to get Started
         </div>
       {:else}
         <h3>
-          Subform Type {subformType == "json"
+          Subform Type - {subformType == "json"
             ? "JSON Column"
             : subformType == "embed"
               ? "Embed Document"
@@ -1501,7 +1569,16 @@
               {/if}
             </div>
           {:else}
-            <div class="form-type">Pick From Schema</div>
+            <div
+              class="form-type"
+              class:invalid={$dataSourceStore.type != "link"}
+            >
+              {#if $dataSourceStore.type != "link"}
+                Invalid Schema Selected
+              {:else}
+                Pick From Schema
+              {/if}
+            </div>
           {/if}
         </div>
       {/if}
@@ -1512,6 +1589,7 @@
 
 <style>
   .super-form {
+    flex: auto;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -1520,13 +1598,13 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      min-height: 2rem;
-      padding-bottom: 1rem;
-      margin-bottom: 0.5rem;
-      border-bottom: 1px solid var(--spectrum-global-color-gray-400);
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--spectrum-global-color-gray-300);
 
       &.multiRow {
         border-bottom: unset;
+        margin-bottom: unset;
+        padding-bottom: 0.5rem;
       }
 
       &.multiStep {
@@ -1541,16 +1619,20 @@
 
         & > .title {
           font-size: 16px;
+          display: flex;
+          align-items: center;
+          line-height: 2rem;
+          gap: 0.5rem;
 
           &.small {
-            font-size: 14px;
+            font-size: 15px;
+            line-height: 1rem;
           }
         }
 
         & > .sub-title {
           font-size: 12px;
-          line-height: 1rem;
-          color: var(--spectrum-global-color-gray-700);
+          color: var(--spectrum-global-color-gray-600);
         }
       }
 
@@ -1565,30 +1647,36 @@
       display: flex;
       flex-direction: column;
       gap: 1rem;
-      padding-top: 0.5rem;
+      padding-top: 0.75rem;
     }
     &.form-field {
-      margin-top: 0.85rem;
       &.quiet {
         & > .form-header {
-          border: unset;
-          padding-bottom: 0.25rem;
+          display: none;
         }
       }
 
       & > .form-header {
         min-height: unset;
-        border-bottom: 1px solid var(--spectrum-global-color-gray-300);
-        padding-bottom: 0.5rem;
+        margin: unset;
+        padding: unset;
+        border-bottom: unset;
+        color: var(--spectrum-global-color-gray-600);
 
         &.multiRow {
           border-bottom: unset;
         }
         & > .form-title {
           flex: auto;
-          font-size: 13px;
-          color: var(--spectrum-global-color-gray-700);
+          & > .title {
+            font-size: 13px;
+            letter-spacing: 1.2px;
+          }
         }
+      }
+
+      & > .form-body {
+        padding-top: 0.25rem;
       }
     }
 
@@ -1609,6 +1697,7 @@
     display: grid;
     grid-template-columns: repeat(var(--form-columns), 1fr);
     column-gap: 0.75rem;
+    row-gap: 2px;
     justify-items: stretch;
 
     &.labels-left {
@@ -1634,7 +1723,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.5rem;
+    gap: 0.25rem;
     padding: 1rem;
     border: 1px dashed var(--spectrum-global-color-gray-400);
 
@@ -1647,7 +1736,7 @@
     & > .message {
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 0.5rem;
       justify-content: center;
     }
 
@@ -1667,6 +1756,11 @@
         border-radius: 4px;
         gap: 0.5rem;
         padding: 0.5rem;
+
+        &.invalid {
+          color: var(--spectrum-global-color-red-400);
+          border-color: var(--spectrum-global-color-red-500);
+        }
 
         & > .field {
           display: flex;

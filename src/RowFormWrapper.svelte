@@ -2,19 +2,17 @@
   import { getContext, createEventDispatcher, onMount } from "svelte";
   import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
 
-  const { enrichButtonActions, memo, builderStore } = getContext("sdk");
+  const { enrichButtonActions, builderStore } = getContext("sdk");
   const allContext = getContext("context");
 
   const dispatch = createEventDispatcher();
-
-  export let isValid = false;
-  export let isDirty;
-
-  export let isNew;
   export let disabled;
   export let actionsMode;
   export let inView;
   export let compact;
+  export let quiet;
+
+  export let isNew;
 
   // Multi Step Forms
   export let richSteps;
@@ -29,8 +27,7 @@
   export let row;
 
   let activeStep = 1;
-  let initialized = isNew;
-
+  let initialized;
   $: inBuilder = $builderStore.inBuilder;
   $: isDeleted = row._deleted;
   $: multiStep = richSteps.length > 1 || richSteps[0].title;
@@ -41,17 +38,19 @@
     form: getContext("form"),
     init: (form) => {
       let unsubscribe = form.formState.subscribe((value) => {
+        if (!initialized && !isNew) {
+          initialized = true;
+          return;
+        }
         let values = unflattenObject(value.values);
-        if (initialized) {
-          if (!isEmpty(values)) formClientApi.valuesChanged(values);
-        } else initialized = true;
+        formClientApi.valuesChanged(values, value.valid);
         activeStep = value.currentStep;
         dispatch("step-change", activeStep);
       });
     },
-    valuesChanged: (values) => {
-      row = { ...values, _isDirty: true };
-      dispatch("valuesChanged", values);
+    valuesChanged: (values, _isValid) => {
+      let new_row = { ...values, _isDirty: !isEmpty(values), _isValid };
+      dispatch("valuesChanged", new_row);
     },
   };
 
@@ -209,7 +208,7 @@
     </div>
   {/if}
 
-  <div class="row-body">
+  <div class="row-body" class:multiStep class:quiet>
     <slot />
   </div>
 </div>
@@ -253,12 +252,10 @@
         justify-content: space-between;
         align-items: flex-start;
         margin-top: 8px;
-        margin-bottom: 8px;
-        border-bottom: 1px solid var(--spectrum-global-color-gray-300);
 
         &.isNew {
           justify-content: center;
-          margin-bottom: 1rem;
+          margin-bottom: 1.5rem;
           border-bottom: unset;
         }
 
@@ -275,6 +272,19 @@
 
     & > .row-body {
       flex: auto;
+
+      &.multiStep {
+        flex: auto;
+        padding: 1rem;
+        border: 1px solid var(--spectrum-global-color-gray-300);
+      }
+
+      &.quiet {
+        padding: unset;
+        padding-top: 1rem;
+        border: unset;
+        border-top: 1px solid var(--spectrum-global-color-gray-300);
+      }
     }
   }
 
@@ -341,17 +351,19 @@
     display: flex;
     gap: 0.25rem;
     color: var(--spectrum-global-color-gray-600);
+    margin-bottom: -1px;
+    z-index: 1;
 
     & > .tab {
       width: 8rem;
-      height: 1.75rem;
+      height: 1.85rem;
       display: flex;
       justify-content: center;
       align-items: center;
       border: 1px solid var(--spectrum-global-color-gray-300);
       border-top-left-radius: 4px;
       border-top-right-radius: 4px;
-      border-bottom: 0px transparent;
+      border-bottom: 1px transparent;
       cursor: pointer;
 
       &:hover {
@@ -360,10 +372,11 @@
 
       &.active {
         background-color: var(--spectrum-global-color-gray-100);
-        border-color: var(--spectrum-global-color-gray-400);
+        border-color: var(--spectrum-global-color-gray-300);
         color: var(--spectrum-global-color-gray-700);
         cursor: default;
         font-weight: 800;
+        border-bottom: 1px solid var(--spectrum-global-color-gray-100);
       }
     }
   }

@@ -40,16 +40,6 @@
         "type": "static",
         "values": [
           {
-            "label": "Current Row",
-            "key": "currentRow",
-            "type": "object"
-          },
-          {
-            "label": "Rows",
-            "key": "rows",
-            "type": "array"
-          },
-          {
             "label": "Value",
             "key": "__value",
             "type": "object"
@@ -115,18 +105,14 @@
           { "label": "JSON Column", "value": "json" },
           { "label": "Embedded Document", "value": "embed" }
         ],
-        "defaultValue": "link"
+        "defaultValue": "embed"
       },
       {
         "type": "field/json",
         "key": "outerField",
         "label": "Field",
         "resetOn": ["nested", "subformType"],
-        "dependsOn": {
-          "setting": "subformType",
-          "value": "link",
-          "invert": true
-        }
+        "hidden": true
       },
       {
         "type": "field/link",
@@ -413,6 +399,11 @@
             "key": "rowSpan",
             "label": "Row Span",
             "defaultValue": 1
+          },
+          {
+            "type": "text",
+            "key": "hideIfTrue",
+            "label": "Hide If true"
           }
         ]
       },
