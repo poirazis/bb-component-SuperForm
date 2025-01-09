@@ -5,7 +5,7 @@
     "name": "bb-component-SuperForm",
     "friendlyName": "Super Form",
     "description": "A Form component for Budibase",
-    "styles": ["padding", "border", "background"],
+    "styles": ["size", "padding", "border", "background"],
     "icon": "Form",
     "block": true,
     "ejectable": false,
@@ -130,7 +130,7 @@
           "value": "json",
           "invert": true
         },
-        "label": "Schema",
+        "label": "Data",
         "defaultValue": {
           "name": "Custom",
           "label": "Custom"
@@ -267,7 +267,6 @@
             "type": "text",
             "key": "rowId",
             "label": "Row ID",
-            "resetOn": ["multiRow"],
             "dependsOn": {
               "setting": "multiRow",
               "value": true,

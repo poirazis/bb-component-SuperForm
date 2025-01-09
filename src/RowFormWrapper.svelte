@@ -233,14 +233,15 @@
     &.multiRow {
       padding: 0.85rem;
       padding-top: 0.5rem;
-      border: 1px solid var(--spectrum-global-color-gray-300);
+      border: 1px solid var(--spectrum-global-color-gray-200);
 
       &:focus-within {
-        border: 1px solid var(--spectrum-global-color-gray-400);
+        border: 1px solid var(--spectrum-global-color-gray-200);
       }
 
       &.isDirty {
-        border: 1px solid var(--spectrum-global-color-blue-400) !important;
+        border: 1px solid var(--spectrum-global-color-gray-300) !important;
+        background-color: var(--spectrum-global-color-gray-100);
       }
     }
 
@@ -281,9 +282,7 @@
 
       &.quiet {
         padding: unset;
-        padding-top: 1rem;
         border: unset;
-        border-top: 1px solid var(--spectrum-global-color-gray-300);
       }
     }
   }

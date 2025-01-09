@@ -152,6 +152,8 @@
   let newRowForm = [];
   let existingRowForm = [];
 
+  let richFormSubtitle;
+
   // Initialize Stores
   const comp_id = $component.id;
   const dataSourceStore = memo(dataSource);
@@ -164,10 +166,8 @@
   });
 
   $: _actionType = $outerFormSettings?.actionType ?? actionType;
-  $: missingId = _actionType != "create" && !rowId;
-
   // Trigger Reinitialization
-  $: superFormApi.init($dataSourceStore, multiRow, minRows);
+  $: superFormApi.init($dataSourceStore, multiRow, minRows, _actionType);
 
   // Maintain Step while in Builder
   $: inBuilder = $builderStore.inBuilder;
@@ -184,17 +184,36 @@
   // Enrich Form Steps
   $: richSteps = superFormApi.enrichSteps(steps, schema, multiStep);
 
-  // Fetch and load initial data
-  $: query = QueryUtils.buildQuery(filter);
-  $: fetch = superFormApi.createFetch(
-    $dataSourceStore,
-    outerLinkField,
-    multiRow,
-    _actionType,
-    rowId
-  );
+  $: singleFilter = {
+    logicalOperator: "all",
+    onEmptyFilter: "none",
+    groups: [
+      {
+        logicalOperator: "any",
+        filters: [
+          {
+            valueType: "Value",
+            field: "_id",
+            type: "string",
+            operator: "equal",
+            noValue: false,
+            value: rowId,
+          },
+        ],
+      },
+    ],
+  };
 
-  $: superFormApi.getInitialData($fetch);
+  // Fetch and load initial data
+  // If in Builder and no rowid has been set, fetch the first row for preview, else apply
+  $: query =
+    multiRow || (!multiRow && inBuilder && !rowId)
+      ? QueryUtils.buildQuery(filter)
+      : QueryUtils.buildQuery(singleFilter);
+
+  $: fetch = superFormApi.createFetch($dataSourceStore, multiRow);
+  $: fetch?.update({ query });
+  $: superFormApi.getInitialData($fetch, multiRow, _actionType);
 
   $: empty =
     loaded && richSteps[0]?.fields?.length < 1 && $component.children < 1;
@@ -223,6 +242,7 @@
 
   $: enrichedFormTitle = superFormApi.enrichFormTitle(
     formTitle,
+    formSubtitle,
     $formSettings,
     loaded,
     emptyData,
@@ -240,13 +260,15 @@
     },
     init: () => {
       viewToEdit = false;
-      if (!outerField) existingRows = [];
+      existingRows = [];
       rows =
         _actionType == "create"
           ? multiRow
             ? new Array(minRows || 1).fill({})
             : [{}]
           : [];
+
+      console.log("Init", rows, existingRows);
     },
     async fetchSchema(dataSource) {
       schema = undefined;
@@ -545,49 +567,20 @@
         });
     },
     createFetch: (datasource) => {
-      if (_actionType == "create") return;
-      if (missingId && !inBuilder && !multiRow) return;
-
-      if (multiRow || (inBuilder && missingId) || outerLinkField)
-        return fetchData({
-          API,
-          datasource,
-          options: {
-            query,
-            limit: outerLinkField ? 1000 : multiRow ? limit : 1,
-          },
-        });
-
-      if (!multiRow && !missingId && !fetch)
-        return fetchData({
-          API,
-          datasource,
-          options: {
-            query: {
-              equal: {
-                _id: rowId,
-              },
-            },
-          },
-        });
-
-      if (!multiRow && rowId && fetch) {
-        fetch?.update?.({
-          query: {
-            equal: {
-              _id: rowId,
-            },
-          },
-        });
-        return fetch;
-      }
-
-      return;
+      return fetchData({
+        API,
+        datasource,
+        options: {
+          limit: outerLinkField ? 1000 : multiRow ? limit : 1,
+        },
+      });
     },
     getInitialData: (res) => {
       if (res?.loading) return;
 
-      if (outerField) {
+      if (outerField || _actionType == "create") {
+        loaded = true;
+        emptyData = false;
         return;
       }
 
@@ -595,15 +588,18 @@
         existingRows = safeParse(data);
       } else {
         existingRows = res?.rows ?? [];
+        if (outerLinkField && res?.rows.length < 1 && _actionType == "update")
+          rows = [{}];
+        else rows = [];
       }
 
-      if (outerLinkField && res?.rows.length < 1) rows = [{}];
+      emptyData =
+        _actionType != "create" && existingRows?.length < 1 && !outerLinkField;
 
-      emptyData = _actionType != "create" && existingRows?.length < 1;
       loaded = true;
     },
     enrichFormTitle: (titleTemplate) => {
-      if (!loaded) return;
+      if (!loaded || !_actionType) return;
 
       let activeRow = existingRows?.length ? existingRows[0] : {};
       let context = {
@@ -634,6 +630,10 @@
               (multiRow
                 ? entityPlural || beautifyLabel($dataSourceStore.label)
                 : entitySingular || beautifyLabel($dataSourceStore.label));
+
+        richFormSubtitle = formSubtitle
+          ? processStringSync(formSubtitle, context)
+          : undefined;
       }
 
       return title;
@@ -1132,19 +1132,17 @@
     _multiRow = undefined;
   }
 
-  $: if (nested)
-    $component.styles = {
-      ...$component.styles,
-      normal: {
-        ...$component.styles.normal,
-        "grid-column": "span " + colSpan * 6,
-        "grid-row": "span " + rowSpan,
-        flex: nested ? "auto" : "none",
-        display: "flex",
-        "align-items": "stretch",
-        display: visible ? "block" : "none",
-      },
-    };
+  $: $component.styles = {
+    ...$component.styles,
+    normal: {
+      ...$component.styles.normal,
+      "grid-column": "span " + colSpan * 6,
+      "grid-row": "span " + rowSpan,
+      display: "flex",
+      "align-items": "stretch",
+      display: visible ? "flex" : "none",
+    },
+  };
 
   const getJSONFields = (schema) => {
     let jsonFields = [];
@@ -1187,8 +1185,6 @@
     superFormApi?.saveRow();
     outerFormApi?.unregisterSubform(superFormApi);
   });
-
-  $: console.log(visible, existingRows, empty, emptyData, loaded);
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -1215,7 +1211,7 @@
     {#if richSteps[0]?.fields}
       <div class="super-form" class:form-field={outerForm} class:quiet>
         {#if enrichedFormTitle?.trim?.()}
-          <div class="form-header" class:multiRow class:multiStep class:quiet>
+          <div class="form-header">
             <div
               class="form-title"
               style:cursor={canEdit ? "pointer" : null}
@@ -1241,17 +1237,19 @@
                 {/if}
               </span>
 
-              {#if formSubtitle}
-                <span class="sub-title">{formSubtitle}</span>
+              {#if richFormSubtitle}
+                <span class="sub-title">{richFormSubtitle}</span>
               {/if}
             </div>
             <div class="form-buttons">
               {#if extendActions && formButtons.length}
-                {#each formButtons as { type, text, icon, onClick }}
+                {#each formButtons as { type, text, icon, onClick, quiet }}
                   <SuperButton
                     {text}
                     {type}
                     {icon}
+                    {quiet}
+                    {disabled}
                     on:click={handleCustomAction(onClick)}
                   />
                 {/each}
@@ -1304,6 +1302,8 @@
                       <SuperButton
                         icon="ri-save-line"
                         text="Save"
+                        {disabled}
+                        type={"secondary"}
                         on:click={handleSave}
                       />
                     {/if}
@@ -1314,9 +1314,9 @@
           </div>
         {/if}
 
-        <div class="form-body" class:multiRow class:multiStep class:quiet>
+        <div class="form-body">
+          <!-- Existing Rows -->
           {#each existingRows as row, index}
-            {@const deleted = batchMode && row["_deleted"]}
             <div class="form-row">
               <Provider data={{ ...row, index }} scope={ContextScopes.Local}>
                 <BlockComponent
@@ -1331,7 +1331,7 @@
                             tableId: outerForm?.dataSource?.tableId,
                           }
                         : { ...$dataSourceStore, type: "table" },
-                    disabled: deleted || disabled,
+                    disabled: row["_deleted"] || disabled,
                     readonly: !disabled && _actionType === "view",
                   }}
                   styles={{
@@ -1411,7 +1411,8 @@
             </div>
           {/each}
 
-          {#if canAddRows}
+          <!-- New Rows -->
+          {#if rows.length}
             {#each rows as row, index}
               <div
                 class="form-row"
@@ -1593,25 +1594,17 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    border: 1px solid var(--spectrum-global-color-gray-300);
 
     & > .form-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 0.75rem;
       border-bottom: 1px solid var(--spectrum-global-color-gray-300);
-
-      &.multiRow {
-        border-bottom: unset;
-        margin-bottom: unset;
-        padding-bottom: 0.5rem;
-      }
-
-      &.multiStep {
-        border-bottom: unset;
-        padding-bottom: unset;
-        margin-bottom: unset;
-      }
+      background-color: var(--spectrum-global-color-gray-100);
+      padding-left: 0.75rem;
+      padding-right: 0.5rem;
+      min-height: 2.4rem;
       & > .form-title {
         flex: auto;
         display: flex;
@@ -1623,6 +1616,9 @@
           align-items: center;
           line-height: 2rem;
           gap: 0.5rem;
+          text-transform: uppercase;
+          letter-spacing: 1.2px;
+          color: var(--spectrum-global-color-gray-800);
 
           &.small {
             font-size: 15px;
@@ -1647,9 +1643,10 @@
       display: flex;
       flex-direction: column;
       gap: 1rem;
-      padding-top: 0.75rem;
+      padding: 0.75rem;
     }
     &.form-field {
+      border: unset;
       &.quiet {
         & > .form-header {
           display: none;
@@ -1661,7 +1658,7 @@
         margin: unset;
         padding: unset;
         border-bottom: unset;
-        color: var(--spectrum-global-color-gray-600);
+        background-color: unset;
 
         &.multiRow {
           border-bottom: unset;
@@ -1669,22 +1666,39 @@
         & > .form-title {
           flex: auto;
           & > .title {
-            font-size: 13px;
-            letter-spacing: 1.2px;
+            font-size: 11px;
+            letter-spacing: 1px;
           }
         }
       }
 
       & > .form-body {
-        padding-top: 0.25rem;
+        padding: unset;
+        border: unset;
       }
     }
 
     &.quiet {
+      border: unset;
+      gap: 0.5rem;
       & > .form-header {
+        background-color: unset;
         border: unset;
-        padding-bottom: unset;
+        padding: unset;
       }
+
+      & > .form-body {
+        padding: unset;
+        border: unset;
+      }
+    }
+
+    &.multiRow {
+      gap: 0.5rem;
+    }
+
+    &.multiStep {
+      gap: 0.5rem;
     }
   }
 
