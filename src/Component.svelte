@@ -96,7 +96,6 @@
   export let outerField;
   export let outerLinkField;
   export let quiet;
-  export let hideIfTrue = false;
 
   // Data Settings
   export let filter;
@@ -206,8 +205,9 @@
 
   // Fetch and load initial data
   // If in Builder and no rowid has been set, fetch the first row for preview, else apply
-  $: query =
-    multiRow || (!multiRow && inBuilder && !rowId)
+  $: query = outerLinkField
+    ? {}
+    : multiRow || (!multiRow && inBuilder && !rowId)
       ? QueryUtils.buildQuery(filter)
       : QueryUtils.buildQuery(singleFilter);
 
@@ -224,21 +224,14 @@
 
   // If we are a nested form of a multi step form and designated to appear on a specific step.
   $: visible =
-    hideIfTrue !== true &&
-    hideIfTrue !== "true" &&
-    ($outerFormSettings?.multiStep && outerFormStep
+    $outerFormSettings?.multiStep && outerFormStep
       ? $outerFormStep == inStep
-      : true);
+      : true;
 
   // Data Loading Management
   $: batchMode =
     actionsMode == "batch" && _actionType != "view" && !outerLinkField;
   $: eventMode = actionsMode == "individual";
-
-  $: canAddRows =
-    (_actionType == "update" && canAdd && multiRow) ||
-    _actionType == "create" ||
-    outerLinkField;
 
   $: enrichedFormTitle = superFormApi.enrichFormTitle(
     formTitle,
@@ -267,8 +260,6 @@
             ? new Array(minRows || 1).fill({})
             : [{}]
           : [];
-
-      console.log("Init", rows, existingRows);
     },
     async fetchSchema(dataSource) {
       schema = undefined;
@@ -343,7 +334,6 @@
             }
           } else {
             if (_actionType != "create") {
-              console.log(outerFieldValue);
               existingRows[0] = {
                 ...outerFieldValue,
                 type: "row",
@@ -639,7 +629,8 @@
       return title;
     },
     saveRow: async () => {
-      if (!superFormApi.validate()) return;
+      if (!superFormApi.validate() || _actionType == "view") return;
+
       // Have child Super Forms save themselves first
       for (let i = 0; i < subforms.length; i++) {
         await subforms[i]?.saveRow();
@@ -802,7 +793,9 @@
       label: labelTemplate
         ? processStringSync(labelTemplate, { field: field?.field })
         : field?.label,
-      placeholder: field.placeholder || field.label || field.field,
+      placeholder: beautifyLabels
+        ? field.label
+        : (field.placeholder ?? field.label),
       useOptionColors: true,
       readonly: field?.readonly || _actionType == "view",
       autocomplete: field?.autocomplete,
@@ -1136,8 +1129,8 @@
     ...$component.styles,
     normal: {
       ...$component.styles.normal,
-      "grid-column": "span " + colSpan * 6,
-      "grid-row": "span " + rowSpan,
+      "grid-column": nested ? "span " + colSpan * 6 : undefined,
+      "grid-row": nested ? "span " + rowSpan : undefined,
       display: "flex",
       "align-items": "stretch",
       display: visible ? "flex" : "none",
@@ -1182,7 +1175,8 @@
   });
 
   onDestroy(() => {
-    superFormApi?.saveRow();
+    // If we are linked to a JSON column, update the value
+    if (outerField) superFormApi?.saveRow();
     outerFormApi?.unregisterSubform(superFormApi);
   });
 </script>
@@ -1303,7 +1297,6 @@
                         icon="ri-save-line"
                         text="Save"
                         {disabled}
-                        type={"secondary"}
                         on:click={handleSave}
                       />
                     {/if}
@@ -1604,30 +1597,31 @@
       background-color: var(--spectrum-global-color-gray-100);
       padding-left: 0.75rem;
       padding-right: 0.5rem;
-      min-height: 2.4rem;
+      min-height: 3rem;
       & > .form-title {
         flex: auto;
         display: flex;
         flex-direction: column;
 
         & > .title {
-          font-size: 16px;
+          font-size: 14px;
           display: flex;
           align-items: center;
           line-height: 2rem;
           gap: 0.5rem;
           text-transform: uppercase;
           letter-spacing: 1.2px;
+          font-weight: 600;
           color: var(--spectrum-global-color-gray-800);
 
           &.small {
-            font-size: 15px;
+            font-size: 13px;
             line-height: 1rem;
           }
         }
 
         & > .sub-title {
-          font-size: 12px;
+          font-size: 13px;
           color: var(--spectrum-global-color-gray-600);
         }
       }
@@ -1644,6 +1638,7 @@
       flex-direction: column;
       gap: 1rem;
       padding: 0.75rem;
+      padding-bottom: 1rem;
     }
     &.form-field {
       border: unset;
@@ -1654,7 +1649,7 @@
       }
 
       & > .form-header {
-        min-height: unset;
+        min-height: 2.2rem;
         margin: unset;
         padding: unset;
         border-bottom: unset;
@@ -1666,7 +1661,9 @@
         & > .form-title {
           flex: auto;
           & > .title {
-            font-size: 11px;
+            font-weight: 400;
+            color: var(--spectrum-global-color-gray-700);
+            font-size: 12px;
             letter-spacing: 1px;
           }
         }
@@ -1674,17 +1671,19 @@
 
       & > .form-body {
         padding: unset;
+        padding-top: 0.25rem;
         border: unset;
       }
     }
 
     &.quiet {
       border: unset;
-      gap: 0.5rem;
+      gap: 1rem;
       & > .form-header {
         background-color: unset;
         border: unset;
         padding: unset;
+        min-height: 2rem;
       }
 
       & > .form-body {

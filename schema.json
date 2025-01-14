@@ -92,7 +92,8 @@
         "type": "text",
         "key": "formSubtitle",
         "label": "Subtitle",
-        "nested": true
+        "nested": true,
+        "resetOn": ["dataSource"]
       },
       {
         "type": "select",
@@ -398,11 +399,6 @@
             "key": "rowSpan",
             "label": "Row Span",
             "defaultValue": 1
-          },
-          {
-            "type": "text",
-            "key": "hideIfTrue",
-            "label": "Hide If true"
           }
         ]
       },
