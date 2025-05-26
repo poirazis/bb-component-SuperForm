@@ -1,0 +1,120 @@
+{
+  "type": "component",
+  "metadata": {},
+  "schema": {
+    "name": "bb-component-SuperFormSimple",
+    "friendlyName": "Super Form Simple",
+    "description": "A Form Component for Budibase",
+    "icon": "Form",
+    "hasChildren": true,
+    "showEmptyState": true,
+    "actions": [
+      "ValidateForm",
+      "ClearForm",
+      "ChangeFormStep",
+      "UpdateFieldValue",
+      "ScrollTo"
+    ],
+    "styles": ["padding", "size", "background", "border", "shadow"],
+    "size": {
+      "width": 400,
+      "height": 400
+    },
+    "grid": {
+      "hAlign": "stretch",
+      "vAlign": "stretch"
+    },
+    "settings": [
+      {
+        "type": "select",
+        "label": "Type",
+        "key": "actionType",
+        "options": ["Create", "Update"],
+        "defaultValue": "Create"
+      },
+      {
+        "type": "schema",
+        "label": "Schema",
+        "key": "dataSource",
+        "defaultValue": {
+          "name": "Custom",
+          "label": "Custom"
+        }
+      },
+      {
+        "type": "select",
+        "label": "Size",
+        "key": "size",
+        "options": [
+          {
+            "label": "Medium",
+            "value": "spectrum--medium"
+          },
+          {
+            "label": "Large",
+            "value": "spectrum--large"
+          }
+        ],
+        "defaultValue": "spectrum--medium"
+      },
+      {
+        "type": "boolean",
+        "label": "Disabled",
+        "key": "disabled",
+        "defaultValue": false
+      },
+      {
+        "type": "boolean",
+        "label": "Read only",
+        "key": "readonly",
+        "defaultValue": false,
+        "dependsOn": {
+          "setting": "disabled",
+          "value": true,
+          "invert": true
+        }
+      },
+      {
+        "type": "text",
+        "label": "Initial form step",
+        "key": "initialFormStep",
+        "defaultValue": 1
+      }
+    ],
+    "context": [
+      {
+        "type": "static",
+        "values": [
+          {
+            "label": "Value",
+            "key": "__value",
+            "type": "object"
+          },
+          {
+            "label": "Valid",
+            "key": "__valid",
+            "type": "boolean"
+          },
+          {
+            "label": "Dirty",
+            "key": "__dirty",
+            "type": "boolean"
+          },
+          {
+            "label": "Current Step",
+            "key": "__currentStep",
+            "type": "number"
+          },
+          {
+            "label": "Current Step Valid",
+            "key": "__currentStepValid",
+            "type": "boolean"
+          }
+        ]
+      },
+      {
+        "type": "form"
+      }
+    ]
+  }
+}
