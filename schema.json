@@ -2,8 +2,8 @@
   "type": "component",
   "metadata": {},
   "schema": {
-    "name": "bb-component-SuperFormSimple",
-    "friendlyName": "Super Form Simple",
+    "name": "bb-component-SuperForm",
+    "friendlyName": "Super Form",
     "description": "A Form Component for Budibase",
     "icon": "Form",
     "hasChildren": true,
@@ -42,22 +42,6 @@
         }
       },
       {
-        "type": "select",
-        "label": "Size",
-        "key": "size",
-        "options": [
-          {
-            "label": "Medium",
-            "value": "spectrum--medium"
-          },
-          {
-            "label": "Large",
-            "value": "spectrum--large"
-          }
-        ],
-        "defaultValue": "spectrum--medium"
-      },
-      {
         "type": "boolean",
         "label": "Disabled",
         "key": "disabled",
@@ -79,6 +63,43 @@
         "label": "Initial form step",
         "key": "initialFormStep",
         "defaultValue": 1
+      },
+      {
+        "tag": "style",
+        "type": "select",
+        "key": "flex",
+        "showInBar": true,
+        "barStyle": "buttons",
+        "options": [
+          {
+            "label": "Shrink",
+            "value": "none",
+            "barIcon": "Minimize",
+            "barTitle": "Shrink container"
+          },
+          {
+            "label": "Grow",
+            "value": "auto",
+            "barIcon": "Maximize",
+            "barTitle": "Grow container"
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Events",
+        "settings": [
+          {
+            "type": "event",
+            "label": "On Change",
+            "key": "onChange"
+          },
+          {
+            "type": "event",
+            "label": "On Reset",
+            "key": "onReset"
+          }
+        ]
       }
     ],
     "context": [

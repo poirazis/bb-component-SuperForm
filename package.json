@@ -1,6 +1,6 @@
 {
-  "name": "bb-component-SuperFormSimple",
-  "version": "1.0.1",
+  "name": "bb-component-SuperForm",
+  "version": "1.0.2",
   "description": "A Form Component for Budibase",
   "license": "MIT",
   "svelte": "index.js",
