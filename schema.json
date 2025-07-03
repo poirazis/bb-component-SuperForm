@@ -70,6 +70,7 @@
         "key": "flex",
         "showInBar": true,
         "barStyle": "buttons",
+        "defaultValue": "none",
         "options": [
           {
             "label": "Shrink",
