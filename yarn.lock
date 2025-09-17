@@ -275,11 +275,6 @@
   resolved "https://registry.npmjs.org/@parcel/watcher-linux-x64-glibc/-/watcher-linux-x64-glibc-2.5.1.tgz"
   integrity sha512-GcESn8NZySmfwlTsIur+49yDqSny2IhPeZfXunQi48DMugKeZ7uy1FX83pO0X22sHntJ4Ub+9k34XQCX+oHt2A==
 
-"@parcel/watcher-linux-x64-musl@2.5.1":
-  version "2.5.1"
-  resolved "https://registry.npmjs.org/@parcel/watcher-linux-x64-musl/-/watcher-linux-x64-musl-2.5.1.tgz"
-  integrity sha512-n0E2EQbatQ3bXhcH2D1XIAANAcTZkQICBPVaxMeaCVBtOpBZpWJuf7LwyWPSBDITb7In8mqQgJ7gH8CILCURXg==
-
 "@parcel/watcher@^2.4.1":
   version "2.5.1"
   resolved "https://registry.npmjs.org/@parcel/watcher/-/watcher-2.5.1.tgz"
@@ -304,16 +299,23 @@
     "@parcel/watcher-win32-ia32" "2.5.1"
     "@parcel/watcher-win32-x64" "2.5.1"
 
-"@poirazis/supercomponents-shared@^1.0.11":
-  version "1.0.18"
-  resolved "https://registry.npmjs.org/@poirazis/supercomponents-shared/-/supercomponents-shared-1.0.18.tgz"
-  integrity sha512-a4Y+yHlaWMPFht5CMiV1O7HefveYib0BhbIAC1bfjphjg+fDiwPeqX5KvjC6RwZ4XTGiQApq6Ti9jxJuWNK2+g==
+"@phosphor-icons/web@^2.1.2":
+  version "2.1.2"
+  resolved "https://registry.npmjs.org/@phosphor-icons/web/-/web-2.1.2.tgz"
+  integrity sha512-rPAR9o/bEcp4Cw4DEeZHXf+nlGCMNGkNDRizYHM47NLxz9vvEHp/Tt6FMK1NcWadzw/pFDPnRBGi/ofRya958A==
+
+"@poirazis/supercomponents-shared@latest":
+  version "1.0.37"
+  resolved "https://registry.npmjs.org/@poirazis/supercomponents-shared/-/supercomponents-shared-1.0.37.tgz"
+  integrity sha512-X6txmcPJ+Kl8pXQ4CNxanzCwhNmWQN3xSj/vaPmJegcXCUJY3nBFxtYw2AaClEM7/hXrik1ILsTUhUGfZQ88jA==
   dependencies:
     "@budibase/types" "^2.33.14"
+    "@phosphor-icons/web" "^2.1.2"
     "@sveltejs/svelte-virtual-list" "^3.0.1"
     date-picker-svelte "^2.16.0"
+    imask "^6.6.3"
     shortid "^2.2.17"
-    svelte-dnd-action "^0.9.61"
+    svelte-dnd-action "^0.9.65"
     svelte-fsm "^1.2.0"
     svelte-portal "^2.2.1"
     svelte-virtual-list "^3.0.1"
@@ -1837,6 +1839,11 @@ ignore@^5.2.4:
   version "5.3.2"
   resolved "https://registry.npmjs.org/ignore/-/ignore-5.3.2.tgz"
   integrity sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==
+
+imask@^6.6.3:
+  version "6.6.3"
+  resolved "https://registry.npmjs.org/imask/-/imask-6.6.3.tgz"
+  integrity sha512-a9MTDhm+ET4G2IRcdUGuVTXHS05WsRNPGM5CeNJnXiXuoi4zv7g0/UDFLlRF4lBBeb8EWds4C4JVwhI0nuAIug==
 
 immediate@^3.2.3, immediate@3.3.0:
   version "3.3.0"
@@ -4351,10 +4358,10 @@ supports-preserve-symlinks-flag@^1.0.0:
   resolved "https://registry.npmjs.org/supports-preserve-symlinks-flag/-/supports-preserve-symlinks-flag-1.0.0.tgz"
   integrity sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==
 
-svelte-dnd-action@^0.9.61:
-  version "0.9.61"
-  resolved "https://registry.npmjs.org/svelte-dnd-action/-/svelte-dnd-action-0.9.61.tgz"
-  integrity sha512-xj0jZNdV44MAMbdGIAuBYEombmK7A7ticemOtdR5ErWw0f3IxcfcnrRjlYEK0rRjsahVsU+VdGUMwjPVyXrSrA==
+svelte-dnd-action@^0.9.65:
+  version "0.9.65"
+  resolved "https://registry.npmjs.org/svelte-dnd-action/-/svelte-dnd-action-0.9.65.tgz"
+  integrity sha512-GKFtrAtYAjcm27aMELoXOhkLtKA1AEoj2njjCReCer6jh1hnRtTHdEO4Kjfpayz+ZAvE0MMwIvLISW3tsiO9Qg==
 
 svelte-fsm@^1.2.0:
   version "1.2.0"

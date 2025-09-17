@@ -28,12 +28,12 @@ jobs:
       - name: Make the production plugin bundle
         run: |
           cd bb_super_components_shared
-          yarn
+          npm install
           cd ../bb-component-SuperForm
           release_version=$(cat package.json | jq -r '.version')
           echo "RELEASE_VERSION=$release_version" >> $GITHUB_ENV
-          yarn
-          yarn build
+          npm install
+          npm run build
       - name: Perform Github Release
         uses: softprops/action-gh-release@v1
         with:
