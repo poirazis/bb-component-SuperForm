@@ -1,36 +1,72 @@
 <script>
-  import { getContext, onMount, onDestroy, setContext } from "svelte";
+  import { getContext, onMount, onDestroy, setContext, tick } from "svelte";
   import RowFormWrapper from "./RowFormWrapper.svelte";
-  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
+  import SuperFormHeader from "./SuperFormHeader.svelte";
+  import NewFormWizard from "./NewFormWizard.svelte";
   import { fly } from "svelte/transition";
-  import { get } from "svelte/store";
+  import { get, derived } from "svelte/store";
+
+  import { SuperForm } from "@poirazis/supercomponents-shared";
 
   const FieldTypeToComponentMap = {
-    string: "plugin/bb-component-SuperFieldText",
-    number: "plugin/bb-component-SuperFieldNumber",
-    bigint: "plugin/bb-component-SuperFieldNumber",
-    options: "plugin/bb-component-SuperFieldOption",
-    array: "plugin/bb-component-SuperFieldOptions",
-    jsonarray: "plugin/bb-component-SuperFieldArray",
-    boolean: "plugin/bb-component-SuperFieldBoolean",
-    longform: "longformfield",
-    datetime: "plugin/bb-component-SuperFieldDatetime",
-    link: "plugin/bb-component-SuperFieldRelationship",
-    json: "jsonfield",
-    barcodeqr: "codescanner",
-    bb_reference_single: "plugin/bb-component-SuperFieldRelationship",
-    bb_reference: "plugin/bb-component-SuperFieldRelationship",
-    signature_single: "signaturesinglefield",
-    attachment_single: "plugin/bb-component-SuperFieldAttachment",
-    attachment: "plugin/bb-component-SuperFieldAttachmentList",
+    super_components: {
+      string: "plugin/bb-component-SuperFieldText",
+      icon: "plugin/bb-component-SuperFieldIcon",
+      color: "plugin/bb-component-SuperFieldColor",
+      number: "plugin/bb-component-SuperFieldNumber",
+      bigint: "plugin/bb-component-SuperFieldNumber",
+      options: "plugin/bb-component-SuperFieldOption",
+      array: "plugin/bb-component-SuperFieldOptions",
+      jsonarray: "plugin/bb-component-SuperFieldArray",
+      boolean: "plugin/bb-component-SuperFieldBoolean",
+      longform: "longformfield",
+      datetime: "plugin/bb-component-SuperFieldDatetime",
+      link: "plugin/bb-component-SuperFieldRelationship",
+      self_link: "plugin/bb-component-SuperFieldRelationship",
+      json: "plugin/bb-component-SuperFieldJSON",
+      barcodeqr: "codescanner",
+      bb_reference_single: "plugin/bb-component-SuperFieldRelationship",
+      bb_reference: "plugin/bb-component-SuperFieldRelationship",
+      signature_single: "signaturesinglefield",
+      attachment_single: "plugin/bb-component-SuperFieldAttachment",
+      attachment: "plugin/bb-component-SuperFieldAttachmentList",
+      tags: "plugin/bb-component-SuperFieldTags",
+    },
+    budibase_components: {
+      string: "stringfield",
+      number: "numberfield",
+      bigint: "bigintfield",
+      options: "optionsfield",
+      array: "multifieldselect",
+      jsonarray: "jsonarray",
+      boolean: "booleanfield",
+      longform: "longformfield",
+      datetime: "datetimefield",
+      link: "relationshipfield",
+      self_link: "relationship",
+      json: "jsonfield",
+      barcodeqr: "codescannerfield",
+      bb_reference_single: "bbreferencesinglefield",
+      bb_reference: "bbreferencefield",
+      signature_single: "signaturesinglefield",
+      attachment_single: "attachmentsinglefield",
+      attachment: "attachmentfield",
+    },
   };
+
+  const specialColumns = [
+    "created_at",
+    "created_by",
+    "updated_at",
+    "updated_by",
+    "deleted_at",
+    "deleted_by",
+  ];
 
   const {
     Block,
     BlockComponent,
     memo,
-    Provider,
-    ContextScopes,
     API,
     builderStore,
     notificationStore,
@@ -51,6 +87,9 @@
   const outerFormSettings = getContext("super-form-settings");
   const outerFormApi = getContext("super-form-api");
 
+  export let showHeader = true;
+  export let showFooter = true;
+  export let formFooterText;
   export let formTitle;
   export let titleIcon;
   export let formSubtitle;
@@ -58,9 +97,11 @@
   export let subformType = "link";
   export let extendActions;
   export let formButtons = [];
+  export let buttonPosition = "top";
   export let hideDefaultActions = false;
   export let actionType = "create";
   export let dataSource;
+  export let useAutocolumns = true;
 
   export let disabled;
   export let fields;
@@ -83,7 +124,7 @@
   export let maxRows;
   export let compact;
   export let canAdd = true;
-  export let data;
+  export let rowData;
 
   // Multi Step Settings
   export let multiStep;
@@ -95,7 +136,6 @@
   export let rowSpan = 1;
   export let outerField;
   export let outerLinkField;
-  export let quiet;
 
   // Data Settings
   export let filter;
@@ -110,8 +150,12 @@
   export let labelTemplate;
   export let beautifyLabels = true;
   export let slotFirst;
+  export let slotSpan = 1;
+
   export let entitySingular;
   export let entityPlural;
+  export let flex = "none";
+  export let component_type = "super_components";
 
   // Internal Properties
   let _outerField;
@@ -124,6 +168,8 @@
 
   let jsonFields = memo([]);
   let embedFields = memo([]);
+  let currentUser = $allContext?.user?.email || "Unknown User";
+
   $: jsonFields.set(getJSONFields(schema));
   $: embedFields.set(getEmbedFields(schema));
 
@@ -144,8 +190,7 @@
   let primaryDisplay;
   let rows = [{}];
   let existingRows = [];
-  let titleHover;
-  let viewToEdit;
+  let viewToEdit = false;
   let activeStep = 0;
 
   let newRowForm = [];
@@ -165,8 +210,11 @@
   });
 
   $: _actionType = $outerFormSettings?.actionType ?? actionType;
+
   // Trigger Reinitialization
   $: superFormApi.init($dataSourceStore, multiRow, minRows, _actionType);
+  $: superFormApi.resetState(rowId);
+  $: superFormApi.switchState(viewToEdit);
 
   // Maintain Step while in Builder
   $: inBuilder = $builderStore.inBuilder;
@@ -181,7 +229,12 @@
   $: superFormApi?.fetchSchema($dataSourceStore, outerField, outerLinkField);
 
   // Enrich Form Steps
-  $: richSteps = superFormApi.enrichSteps(steps, schema, multiStep);
+  $: richSteps = superFormApi.enrichSteps(
+    steps,
+    schema,
+    multiStep,
+    useAutocolumns
+  );
 
   $: singleFilter = {
     logicalOperator: "all",
@@ -209,18 +262,61 @@
     ? {}
     : multiRow || (!multiRow && inBuilder && !rowId)
       ? QueryUtils.buildQuery(filter)
-      : QueryUtils.buildQuery(singleFilter);
+      : rowId
+        ? QueryUtils.buildQuery(singleFilter)
+        : null;
 
-  $: fetch = superFormApi.createFetch($dataSourceStore, multiRow);
-  $: fetch?.update({ query });
+  $: fetch =
+    query !== null ? superFormApi.createFetch($dataSourceStore, query) : null;
   $: superFormApi.getInitialData($fetch, multiRow, _actionType);
+
+  // Reset state when no query (rowId unset outside builder)
+  $: if (query === null) {
+    loaded = _actionType === "create";
+    emptyData = _actionType !== "create";
+    existingRows = [];
+  }
+
+  // Check if special columns exist in the schema
+  $: hasSpecialColumns =
+    schema &&
+    Object.keys(schema).some((field) => specialColumns.includes(field));
+
+  // Format dates for footer
+  $: formattedUpdated = existingRows[0]?.updated_at
+    ? (() => {
+        const date = new Date(existingRows[0].updated_at);
+        return `${date.getDate().toString().padStart(2, "0")}/${(
+          date.getMonth() + 1
+        )
+          .toString()
+          .padStart(2, "0")}/${date.getFullYear().toString().slice(-2)} ${date
+          .getHours()
+          .toString()
+          .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+      })()
+    : null;
+  $: formattedCreated = existingRows[0]?.created_at
+    ? (() => {
+        const date = new Date(existingRows[0].created_at);
+        return `${date.getDate().toString().padStart(2, "0")}/${(
+          date.getMonth() + 1
+        )
+          .toString()
+          .padStart(2, "0")}/${date.getFullYear().toString().slice(-2)} ${date
+          .getHours()
+          .toString()
+          .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+      })()
+    : null;
 
   $: empty =
     loaded && richSteps[0]?.fields?.length < 1 && $component.children < 1;
 
-  $: dirty = rows.filter((row) => row._isDirty).length > 0;
-
-  $: valid = rows.filter((row) => row._isValid == false).length < 1;
+  $: dirty = derived(
+    [...newRowForm, ...existingRowForm].map((form) => form?.formState),
+    (formStates) => formStates.some((state) => state?.dirty)
+  );
 
   // If we are a nested form of a multi step form and designated to appear on a specific step.
   $: visible =
@@ -239,7 +335,8 @@
     $formSettings,
     loaded,
     emptyData,
-    $fetch
+    $fetch,
+    primaryDisplay
   );
 
   /** The Super Form API
@@ -249,17 +346,50 @@
   const superFormApi = {
     id: comp_id,
     get __dirty() {
-      return rows.filter((row) => row._isDirty).length > 0;
+      return $dirty;
     },
     init: () => {
-      viewToEdit = false;
       existingRows = [];
+      existingRowForm = [];
       rows =
         _actionType == "create"
           ? multiRow
             ? new Array(minRows || 1).fill({})
             : [{}]
           : [];
+    },
+    updateField: async ({ type, field, value }) => {
+      await tick();
+
+      var formApi =
+        _actionType == "create"
+          ? newRowForm[0].formApi
+          : existingRowForm[0].formApi;
+
+      if (formApi)
+        if (type === "set") {
+          formApi.setFieldValue(field, value);
+        } else {
+          formApi.resetField(field);
+        }
+    },
+    resetState: () => {
+      if (nested) return;
+
+      _actionType = actionType;
+      viewToEdit = false;
+    },
+    switchState: (state) => {
+      if (nested) return;
+
+      if (state) {
+        _actionType = "update";
+        $formSettings.actionType = "update";
+      } else {
+        _actionType = actionType;
+        $formSettings.actionType = actionType;
+      }
+      viewToEdit = state;
     },
     async fetchSchema(dataSource) {
       schema = undefined;
@@ -273,7 +403,11 @@
 
       if (dataSource?.name != "Custom" || subformType != "json") {
         if (dataSource.schema || dataSource.type == "viewV2") {
-          schema = await fetchDatasourceSchema(dataSource);
+          try {
+            schema = await fetchDatasourceSchema(dataSource);
+          } catch (error) {
+            schema = null;
+          }
         } else if (dataSource?.tableId) {
           try {
             definition = await API.fetchTableDefinition(dataSource.tableId);
@@ -345,7 +479,8 @@
           emptyData = _actionType != "create" && existingRows?.length < 1;
         } else if (outerFieldSchema?.type == "link") {
           _multiRow =
-            outerFieldSchema.relationshipType == "many-to-many" &&
+            (outerFieldSchema.relationshipType == "many-to-many" ||
+              outerFieldSchema.relationshipType == "many-to-one") &&
             multiRow !== false;
         }
 
@@ -405,6 +540,7 @@
           text: "Back",
           type: "secondary",
           size: "M",
+          quiet: true,
           onClick: [
             {
               parameters: {
@@ -441,6 +577,7 @@
           text: "Back",
           type: "secondary",
           size: "M",
+          quiet: true,
           onClick: [
             {
               parameters: {
@@ -480,7 +617,7 @@
             {
               "##eventHandlerType": "Save Row",
               parameters: {
-                providerId: comp_id + "-form",
+                providerId: comp_id,
                 tableId: $dataSourceStore.tableId,
               },
             },
@@ -489,7 +626,8 @@
       ];
 
       if (buttons) return buttons;
-      else if (total == index + 1 || total == 1) return defaultButtonsLast;
+      else if (total == index + 1 || total == 1)
+        return total > 1 ? defaultButtonsLast : [defaultButtonsLast[1]];
       else if (index > 0 && index < total) return defaultButtonsMiddle;
       else return defaultButtonsFirst;
     },
@@ -504,7 +642,10 @@
         Object.values(schema)
           .filter(
             (field) =>
-              !field.autocolumn && field.visible != false && !field.nestedJSON
+              (!field.autocolumn ||
+                (useAutocolumns && specialColumns.includes(field.name))) &&
+              field.visible != false &&
+              !field.nestedJSON
           )
           .sort((a, b) => {
             return a.order - b.order;
@@ -519,10 +660,10 @@
                 });
               } else {
                 Object.keys(field.schema ?? {})?.forEach((sub_field) => {
-                  if (field.schema[sub_field].type != "json")
+                  if (field.schema[sub_field].type != "json") {
                     if (field.schema[sub_field].type == "array" && !nested) {
                       return;
-                    } else
+                    } else {
                       defaultFields.push({
                         label: outerField
                           ? sub_field
@@ -530,13 +671,15 @@
                         field: field.name + "." + sub_field,
                         active: true,
                       });
+                    }
+                  }
                 });
               }
             } else {
               defaultFields.push({
                 field: field.name,
-                label: field.name.endsWith("_self_")
-                  ? field.name.slice(0, -6)
+                label: field.name.startsWith("fk_self_")
+                  ? "Parent"
                   : field?.name || field.field,
                 active: true,
               });
@@ -544,29 +687,65 @@
           });
       }
 
-      return [...fields, ...defaultFields]
+      let allFields = [...fields, ...defaultFields];
+      let nonSpecialFields = allFields.filter(
+        (f) => !specialColumns.includes(f.field)
+      );
+      let specialFields = allFields.filter((f) =>
+        specialColumns.includes(f.field)
+      );
+
+      return [...nonSpecialFields, ...specialFields]
         .filter((field) => field.active)
         .map((field) => {
+          if (field.field.startsWith("fk_self_")) field.label = "Parent";
+
+          const fieldName = field.field;
+          const isSpecial = specialColumns.includes(fieldName);
+          let extraProps = {};
+
+          if (isSpecial && useAutocolumns) {
+            extraProps.invisible = true;
+            if (_actionType === "create") {
+              if (fieldName === "created_by") {
+                extraProps.defaultValue = currentUser;
+              }
+              if (fieldName === "created_at") {
+                extraProps.defaultValue = new Date();
+              }
+            }
+            if (_actionType === "update" || _actionType === "view") {
+              if (fieldName === "updated_by") {
+                extraProps.defaultValue = currentUser;
+              }
+              if (fieldName === "updated_at") {
+                extraProps.defaultValue = new Date();
+              }
+            }
+          }
+
           return {
             ...field,
             label:
               beautifyLabels && !labelTemplate
                 ? beautifyLabel(field.label)
                 : field.label,
+            extraProps,
           };
         });
     },
-    createFetch: (datasource) => {
+    createFetch: (datasource, query) => {
       return fetchData({
         API,
         datasource,
         options: {
           limit: outerLinkField ? 1000 : multiRow ? limit : 1,
+          query,
         },
       });
     },
     getInitialData: (res) => {
-      if (res?.loading) return;
+      if (!res?.loaded) return;
 
       if (outerField || _actionType == "create") {
         loaded = true;
@@ -574,10 +753,11 @@
         return;
       }
 
-      if (multiRow && data) {
-        existingRows = safeParse(data);
+      if (multiRow && rowData) {
+        existingRows = safeParse(rowData);
       } else {
         existingRows = res?.rows ?? [];
+
         if (outerLinkField && res?.rows.length < 1 && _actionType == "update")
           rows = [{}];
         else rows = [];
@@ -597,7 +777,6 @@
         [comp_id]: { ...activeRow },
       };
 
-      let actionName = _actionType[0].toUpperCase() + _actionType.substr(1);
       let title;
 
       if (nested) {
@@ -615,14 +794,13 @@
             ? activeRow?.[primaryDisplay]
               ? activeRow[primaryDisplay]
               : $dataSourceStore.label
-            : actionName +
-              " " +
+            : "New " +
               (multiRow
                 ? entityPlural || beautifyLabel($dataSourceStore.label)
                 : entitySingular || beautifyLabel($dataSourceStore.label));
 
         richFormSubtitle = formSubtitle
-          ? processStringSync(formSubtitle, context)
+          ? processStringSync(formSubtitle, $allContext)
           : undefined;
       }
 
@@ -692,12 +870,11 @@
         }
       }
 
-      // We are managing a JSON fiel
+      // We are managing a JSON field
       if (outerField && visible) {
         let formState = existingRowForm[0]?.formState;
-        if (_actionType == "create") formState = newRowForm[0].formState;
+        if (_actionType == "create") formState = newRowForm[0]?.formState;
         let object = unflattenObject(get(formState)?.values);
-
         if (subformType == "embed") outerFieldApi.setValue(object);
         else outerFieldApi.setValue(object[outerField]);
       }
@@ -741,28 +918,15 @@
   };
   // The array of registered subform instances
   let subforms = [];
-
-  const actions = [
-    {
-      type: ActionTypes.ValidateForm,
-      callback: superFormApi.validate,
-    },
-    { type: ActionTypes.ClearForm, callback: superFormApi.reset },
-    { type: ActionTypes.UpdateFieldValue, callback: () => {} },
-    {
-      type: ActionTypes.ChangeFormStep,
-      callback: (e) => {
-        newRowForm[0]?.formApi?.changeStep(e);
-      },
-    },
-    { type: ActionTypes.ScrollTo, callback: () => {} },
-  ];
-
   const getComponentForField = (field) => {
-    const fieldSchemaName = field.field || field.name;
+    const fieldSchemaName = field.name || field.field;
     let json_path;
     let innerType;
     let fieldSchema;
+
+    if (!fieldSchemaName) {
+      return null;
+    }
 
     if (fieldSchemaName.includes(".")) {
       json_path = fieldSchemaName.split(".");
@@ -772,18 +936,40 @@
     } else {
       innerType = schema[fieldSchemaName]?.type;
       if (innerType == "array") {
-        if (schema[fieldSchemaName].constraints.inclusion.length < 1)
+        if (schema[fieldSchemaName]?.constraints?.inclusion?.length < 1)
           innerType = "jsonarray";
       }
+
+      if (
+        fieldSchemaName.toLowerCase() == "color" &&
+        component_type == "super_components"
+      )
+        innerType = "color";
+      if (
+        fieldSchemaName.toLowerCase() == "icon" &&
+        component_type == "super_components"
+      )
+        innerType = "icon";
+
+      if (
+        schema[fieldSchemaName]?.type == "string" &&
+        schema[fieldSchemaName]?.subtype == "array"
+      )
+        innerType = "jsonarray";
+
+      if (
+        schema[fieldSchemaName]?.type == "string" &&
+        schema[fieldSchemaName]?.subtype == "array" &&
+        fieldSchemaName.toLowerCase() == "tags"
+      )
+        innerType = "tags";
     }
 
-    if (!fieldSchemaName) {
-      return null;
-    }
+    const type = fieldSchemaName.startsWith("fk_self_")
+      ? "self_link"
+      : innerType;
 
-    const type = fieldSchemaName.endsWith("_self_") ? "link" : innerType;
-
-    return FieldTypeToComponentMap[type];
+    return FieldTypeToComponentMap[component_type][type];
   };
 
   const getPropsForField = (field, idx) => {
@@ -806,11 +992,12 @@
       compact: true,
       showDirty,
       labelPosition: compact && idx > 0 ? false : labelPosition,
-      ownId: field?.field?.includes("_self_")
-        ? existingRows[idx]?.["_id"]
+      ownId: field?.field?.includes("fk_self_")
+        ? existingRows[idx]?.["id"]
         : null,
       direction: field?.direction == "vertical" ? "column" : "row",
       controlType: "select",
+      ...field.extraProps,
     };
   };
 
@@ -821,7 +1008,11 @@
     fields.forEach((field, index) => {
       let words = field.split("_");
       words.forEach((word, index) => {
-        words[index] = word[0]?.toUpperCase() + word?.slice(1);
+        if (word.length <= 3) {
+          words[index] = word.toUpperCase();
+        } else {
+          words[index] = word[0]?.toUpperCase() + word?.slice(1);
+        }
       });
       fields[index] = words.join(" ");
     });
@@ -872,7 +1063,7 @@
                 confirm: false,
                 notificationOverride: null,
                 tableId: $dataSourceStore.tableId,
-                providerId: comp_id + "-form",
+                providerId: comp_id,
               },
               "##eventHandlerType": "Save Row",
             },
@@ -882,17 +1073,12 @@
           cmd_after = enrichButtonActions(afterSave, $allContext);
 
           await cmd?.();
-          await cmd_after?.();
 
-          superFormApi.reset();
+          cmd_after?.();
+          superFormApi?.reset();
         }
       } else {
         await superFormApi.saveRow();
-        let formState = existingRowForm[0].formState;
-        let richValues = {
-          ...existingRows[0],
-          ...unflattenObject(get(formState).values),
-        };
 
         event = [
           {
@@ -909,17 +1095,14 @@
               confirmButtonText: "Confirm",
               cancelButtonText: "Cancel",
               tableId: $dataSourceStore.tableId,
-              providerId: comp_id + "-form",
+              providerId: comp_id,
             },
             "##eventHandlerType": "Save Row",
           },
         ];
 
         // Expose the internal Form to the outer context
-        cmd = enrichButtonActions(event, {
-          ...$allContext,
-          [comp_id + "-form"]: richValues,
-        });
+        cmd = enrichButtonActions(event, $allContext);
         cmd_after = enrichButtonActions(afterSave, $allContext);
         await cmd?.();
         await cmd_after?.();
@@ -927,6 +1110,7 @@
         if (viewToEdit) {
           viewToEdit = false;
           _actionType = "view";
+          $formSettings.actionType = "view";
         }
 
         fetch?.refresh();
@@ -934,31 +1118,12 @@
     }
   };
 
-  const handleCustomAction = async (action) => {
-    let formState = existingRowForm[0]?.formState;
-    let richValues = unflattenObject(get(formState)?.values);
-
-    // Expose the internal form in case of update
-    let cmd =
-      _actionType != "create"
-        ? enrichButtonActions(action, {
-            ...$allContext,
-            [comp_id + "-form"]: {
-              ...existingRows[0],
-              ...richValues,
-            },
-          })
-        : enrichButtonActions(action, $allContext);
-
-    await cmd?.();
-  };
-
   const handleSaveMany = async () => {
     if (superFormApi.validate()) {
       if (_actionType == "create") {
         for (let i = 0; i < rows.length; i++) {
           const res = await API.saveRow({
-            ...rows[i],
+            ...get(newRowForm[i].formState).values,
             tableId: $dataSourceStore.tableId,
           });
 
@@ -973,11 +1138,8 @@
         rows = [{}];
       } else {
         for (let i = 0; i < existingRows.length; i++) {
-          const formState = existingRowForm[i].formState;
-          const values = unflattenObject(get(formState).values);
           const res = await API.saveRow({
-            ...existingRows[i],
-            ...values,
+            ...get(existingRowForm[i].formState).values,
           });
         }
       }
@@ -1061,79 +1223,52 @@
     }
   };
 
-  /** Propagate changes to the outform when the form values change */
-  const handleValuesChanges = (index, values) => {
-    if (outerFieldApi) {
-      if (outerFieldSchema.type == "json") {
-        if (_actionType == "create") {
-          if (!multiRow) {
-            if (subformType == "json") {
-              outerFieldApi.setValue(values[outerField]);
-            } else outerFieldApi.setValue(values);
-          } else {
-            let cleanRows = rows.map((x) => {
-              delete x._isDirty;
-              return x;
-            });
-            outerFieldApi.setValue({ rows: cleanRows });
-          }
-        } else {
-          outerFieldApi.setValue(values[outerField]);
-        }
-      }
+  const handleBuilderUpdates = () => {
+    if (!inBuilder || !$component.selected) return;
+
+    if (outerFormSettings && !nested) {
+      builderStore.actions.updateProp("nested", true);
+    } else if (!outerFormSettings && nested) {
+      builderStore.actions.updateProp("nested", false);
+      builderStore.actions.updateProp("_instanceName", "New Super Form Pro");
+    }
+
+    if (nested && _outerField) {
+      builderStore.actions.updateProp("subformType", _subFormType);
+      builderStore.actions.updateProp("outerField", _outerField);
+      builderStore.actions.updateProp(
+        "_instanceName",
+        `Subform JSON ${subformType === "embed" ? "Embed - " : "Column - "}${_outerField}`
+      );
+      _outerField = undefined;
+    }
+
+    if (nested && _outerLinkField) {
+      builderStore.actions.updateProp("outerLinkField", _outerLinkField);
+      builderStore.actions.updateProp(
+        "_instanceName",
+        `Subform Link - ${_outerLinkField}`
+      );
+      _outerLinkField = undefined;
+    }
+
+    if (nested && _multiRow) {
+      builderStore.actions.updateProp("multiRow", true);
+      _multiRow = undefined;
     }
   };
 
-  $: if (inBuilder && $component.selected && outerFormSettings && !nested) {
-    builderStore.actions.updateProp("nested", true);
-  }
-
-  $: if (
-    inBuilder &&
-    $component.selected &&
-    !outerFormSettings &&
-    nested &&
-    mounted
-  ) {
-    builderStore.actions.updateProp("nested", false);
-    builderStore.actions.updateProp("_instanceName", "New Super Form");
-  }
-
-  $: if (inBuilder && $component.selected && nested && _outerField) {
-    builderStore.actions.updateProp("subformType", _subFormType);
-    builderStore.actions.updateProp("outerField", _outerField);
-    builderStore.actions.updateProp(
-      "_instanceName",
-      "Subform JSON " +
-        (subformType == "embed" ? "Embed - " : "Column - ") +
-        _outerField
-    );
-    _outerField = undefined;
-  }
-
-  $: if (inBuilder && $component.selected && nested && _outerLinkField) {
-    builderStore.actions.updateProp("outerLinkField", _outerLinkField);
-    builderStore.actions.updateProp(
-      "_instanceName",
-      "Subform Link - " + _outerLinkField
-    );
-    _outerLinkField = undefined;
-  }
-
-  $: if (inBuilder && $component.selected && nested && _multiRow) {
-    builderStore.actions.updateProp("multiRow", true);
-    _multiRow = undefined;
-  }
+  $: handleBuilderUpdates($component?.selected);
 
   $: $component.styles = {
     ...$component.styles,
     normal: {
-      ...$component.styles.normal,
       "grid-column": nested ? "span " + colSpan * 6 : undefined,
       "grid-row": nested ? "span " + rowSpan : undefined,
-      display: "flex",
       "align-items": "stretch",
       display: visible ? "flex" : "none",
+      flex,
+      ...$component.styles.normal,
     },
   };
 
@@ -1159,11 +1294,18 @@
     return embedFields;
   };
 
+  const handleFieldSelect = ({ detail }) => {
+    const { field, subformType } = detail;
+    _outerField = field;
+    _subFormType = subformType;
+  };
+
   // Expose Context for Sub forms to adjust their Action type
   setContext("super-form-json", jsonFields);
   setContext("super-form-embed", embedFields);
   setContext("super-form-settings", formSettings);
   setContext("super-form-api", superFormApi);
+
   $: setContext("field-group", labelPosition);
   $: setContext("field-group-columns", formColumns);
 
@@ -1186,224 +1328,119 @@
 <!-- svelte-ignore a11y-mouse-events-have-key-events -->
 
 <Block>
-  <Provider
-    {actions}
-    data={_actionType != "create"
-      ? {
-          ...existingRows[0],
-        }
-      : {
-          ...rows[0],
-          __value: rows[0],
-          __currentStep: activeStep,
-          __currentStepValid: valid,
-          __valid: valid,
-          __dirty: dirty,
-        }}
-  />
   {#if loaded && !empty && !emptyData}
     {#if richSteps[0]?.fields}
-      <div class="super-form" class:form-field={outerForm} class:quiet>
-        {#if enrichedFormTitle?.trim?.()}
-          <div class="form-header">
-            <div
-              class="form-title"
-              style:cursor={canEdit ? "pointer" : null}
-              on:mouseover={() => (titleHover = canEdit)}
-              on:mouseleave={() => (titleHover = false)}
-              on:click|self={canEdit
-                ? () => {
-                    _actionType = viewToEdit ? "view" : "update";
-                    viewToEdit = !viewToEdit;
-                  }
-                : () => {}}
-            >
-              <span class="title" class:small={formSubtitle}>
-                {#if titleIcon || superFormApi.__dirty}
-                  <i class={titleIcon || "ri-edit-line"} />
-                {/if}
-                {nested ? enrichedFormTitle.toUpperCase() : enrichedFormTitle}
-                {#if canEdit && titleHover && _actionType == "view"}
-                  <i class={"ri-pencil-fill"} style="font-size: 16px;" />
-                {/if}
-                {#if viewToEdit}
-                  <i class={"ri-arrow-go-back-fill"} style="font-size: 16px;" />
-                {/if}
-              </span>
-
-              {#if richFormSubtitle}
-                <span class="sub-title">{richFormSubtitle}</span>
-              {/if}
-            </div>
-            <div class="form-buttons">
-              {#if extendActions && formButtons.length}
-                {#each formButtons as { type, text, icon, onClick, quiet }}
-                  <SuperButton
-                    {text}
-                    {type}
-                    {icon}
-                    {quiet}
-                    {disabled}
-                    on:click={handleCustomAction(onClick)}
-                  />
-                {/each}
-              {/if}
-
-              {#if !nested && $dataSourceStore?.tableId}
-                {#if !hideDefaultActions && _actionType != "view"}
-                  {#if multiStep && _actionType == "create"}
-                    {#if richSteps[activeStep]?.buttons}
-                      {#each richSteps[activeStep]?.buttons as button}
-                        <SuperButton
-                          {...button}
-                          on:click={button.text == "Save" && isParent
-                            ? handleSave
-                            : () => {}}
-                          onClick={button.text == "Save" && isParent
-                            ? () => {}
-                            : enrichButtonActions(button.onClick, $allContext)}
-                        />
-                      {/each}
-                    {/if}
-                  {:else}
-                    {#if !multiRow && _actionType != "create" && canDelete}
-                      <SuperButton
-                        icon="ri-delete-bin-line"
-                        type="warning"
-                        quiet
-                        text="Delete"
-                        on:click={() => handleDelete(0)}
-                      />
-                    {/if}
-                    {#if multiRow && actionsMode == "batch"}
-                      <SuperButton
-                        icon="ri-save-line"
-                        text="Save All"
-                        type="primary"
-                        {disabled}
-                        on:click={handleSaveMany}
-                      />
-                    {:else if !multiRow}
-                      {#if _actionType == "create"}
-                        <SuperButton
-                          text="Reset"
-                          type="secondary"
-                          quiet
-                          {disabled}
-                          on:click={superFormApi.reset}
-                        />
-                      {/if}
-                      <SuperButton
-                        icon="ri-save-line"
-                        text="Save"
-                        {disabled}
-                        on:click={handleSave}
-                      />
-                    {/if}
-                  {/if}
-                {/if}
-              {/if}
-            </div>
-          </div>
+      <div class="super-form" class:form-field={outerForm}>
+        {#if showHeader}
+          <SuperFormHeader
+            title={enrichedFormTitle}
+            subtitle={richFormSubtitle}
+            {titleIcon}
+            isDirty={$dirty}
+            {formButtons}
+            {hideDefaultActions}
+            {disabled}
+            {multiStep}
+            actionType={_actionType}
+            {multiRow}
+            {actionsMode}
+            {canDelete}
+            {canEdit}
+            {viewToEdit}
+            hasDataSource={!nested && $dataSourceStore?.tableId}
+            {richSteps}
+            {activeStep}
+            {isParent}
+            {buttonPosition}
+            on:save={handleSave}
+            on:saveMany={handleSaveMany}
+            on:delete={() => handleDelete(0)}
+            on:reset={superFormApi.reset}
+            on:toggleEdit={() => {
+              viewToEdit = !viewToEdit;
+            }}
+          />
         {/if}
-
         <div class="form-body">
           <!-- Existing Rows -->
           {#each existingRows as row, index}
             <div class="form-row">
-              <Provider data={{ ...row, index }} scope={ContextScopes.Local}>
-                <BlockComponent
-                  type="form"
-                  context="form"
-                  props={{
-                    actionType: "Update",
-                    dataSource:
-                      outerField && subformType == "json"
-                        ? {
-                            type: "table",
-                            tableId: outerForm?.dataSource?.tableId,
-                          }
-                        : { ...$dataSourceStore, type: "table" },
-                    disabled: row["_deleted"] || disabled,
-                    readonly: !disabled && _actionType === "view",
-                  }}
-                  styles={{
-                    normal: {
-                      width: "100%",
-                    },
-                  }}
+              <SuperForm
+                bind:form={existingRowForm[index]}
+                provideContext={!multiRow}
+                {row}
+                actionType="Update"
+                dataSource={outerField && subformType == "json"
+                  ? {
+                      type: "table",
+                      tableId: outerForm?.dataSource?.tableId,
+                    }
+                  : { ...$dataSourceStore, type: "table" }}
+                disabled={row["_deleted"] || disabled}
+                readonly={!disabled && _actionType === "view"}
+                style="width: 100%;"
+              >
+                <RowFormWrapper
+                  {row}
+                  {comp_id}
+                  {disabled}
+                  {multiRow}
+                  {richSteps}
+                  {actionsMode}
+                  {rowActionButtons}
+                  {compact}
+                  inView={_actionType == "view"}
+                  canAdd={index == existingRows.length - 1 &&
+                    rows.length < 1 &&
+                    canAdd}
+                  {batchMode}
+                  {canDelete}
+                  on:delete={(e) => handleDelete(index)}
+                  on:save={(e) => handleSave(index)}
+                  on:add-row={handleAddRow}
                 >
-                  <RowFormWrapper
-                    bind:formObject={existingRowForm[index]}
-                    {row}
-                    {comp_id}
-                    {disabled}
-                    {multiRow}
-                    {richSteps}
-                    {actionsMode}
-                    {rowActionButtons}
-                    {compact}
-                    {quiet}
-                    inView={_actionType == "view"}
-                    canAdd={index == existingRows.length - 1 &&
-                      rows.length < 1 &&
-                      canAdd}
-                    {batchMode}
-                    {canDelete}
-                    on:delete={(e) => handleDelete(index)}
-                    on:save={(e) => handleSave(index)}
-                    on:add-row={handleAddRow}
-                    on:valuesChanged={(e) => {
-                      dirty = true;
-                      // handleValuesChanges(index, e.detail);
-                    }}
-                  >
-                    {#each richSteps as step, idx}
-                      <BlockComponent
-                        type="formstep"
-                        name={"Form Setp - " + (idx + 1)}
-                        props={{
-                          step: idx + 1,
-                          _instanceName: `Step ${idx + 1}`,
-                        }}
-                      >
-                        {#if richSteps[idx]?.desc}
-                          <div class="step-desc">
-                            {richSteps[idx].desc}
-                          </div>
-                        {/if}
-                        <div
-                          class="form-grid"
-                          class:labels-left={labelPosition == "left"}
-                          style:--form-columns={formColumns * 6}
-                        >
-                          {#if slotFirst}
-                            <slot />
-                          {/if}
-                          {#each step.fields as field, idx}
-                            {#if getComponentForField(field) && field.active}
-                              <BlockComponent
-                                context={"field_" + idx}
-                                type={getComponentForField(field)}
-                                props={getPropsForField(field, index)}
-                                order={idx}
-                                interactive
-                                name={"SuperField-" + field?.field}
-                              />
-                            {/if}
-                          {/each}
-                          {#if !slotFirst}
-                            <slot />
-                          {/if}
+                  {#each richSteps as step, idx}
+                    <BlockComponent
+                      type="formstep"
+                      name={"Form Setp - " + (idx + 1)}
+                      props={{
+                        step: idx + 1,
+                        _instanceName: `Step ${idx + 1}`,
+                      }}
+                    >
+                      {#if richSteps[idx]?.desc}
+                        <div class="step-desc">
+                          {richSteps[idx].desc}
                         </div>
-                      </BlockComponent>
-                    {/each}
-                  </RowFormWrapper>
-                </BlockComponent>
-              </Provider>
+                      {/if}
+                      <div
+                        class="form-grid"
+                        class:labels-left={labelPosition == "left"}
+                        style:--form-columns={formColumns * 6}
+                      >
+                        {#if slotFirst}
+                          <slot />
+                        {/if}
+                        {#each step.fields as field, idx}
+                          {#if getComponentForField(field) && field.active}
+                            <BlockComponent
+                              type={getComponentForField(field)}
+                              props={getPropsForField(field, index)}
+                              order={idx}
+                              name={"SuperField-" + field?.field}
+                            />
+                          {/if}
+                        {/each}
+                        {#if !slotFirst}
+                          <slot />
+                        {/if}
+                      </div>
+                    </BlockComponent>
+                  {/each}
+                </RowFormWrapper>
+              </SuperForm>
             </div>
           {/each}
-
           <!-- New Rows -->
           {#if rows.length}
             {#each rows as row, index}
@@ -1413,26 +1450,17 @@
                   ? { duration: 130, y: -40 }
                   : { duration: 0 }}
               >
-                <BlockComponent
-                  type="form"
-                  context="form"
-                  props={{
-                    actionType: "Create",
-                    dataSource: $dataSourceStore,
-                    disabled,
-                  }}
-                  styles={{
-                    normal: {
-                      width: "100%",
-                    },
-                  }}
+                <SuperForm
+                  bind:form={newRowForm[index]}
+                  actionType="Create"
+                  provideContext={!multiRow}
+                  dataSource={$dataSourceStore}
+                  {disabled}
+                  style="width: 100%;"
                 >
                   <RowFormWrapper
-                    bind:formObject={newRowForm[index]}
-                    {row}
                     isNew
                     {compact}
-                    {quiet}
                     {disabled}
                     canDelete={index > 0 ||
                       rows.length > 1 ||
@@ -1442,16 +1470,15 @@
                     {multiRow}
                     {richSteps}
                     actionsMode={nested ? "batch" : actionsMode}
-                    on:step-change={(e) => (activeStep = e.detail - 1)}
+                    on:changeStep={(e) => {
+                      if (activeStep !== e.detail) activeStep = e.detail;
+                    }}
                     on:delete={(e) => handleDelete(index, "new")}
                     on:save={(e) => handleSave(index, "new")}
                     on:add-row={handleAddRow}
-                    on:valuesChanged={(e) => {
-                      rows[index] = {
-                        ...rows[index],
-                        ...e.detail,
-                      };
-                      handleValuesChanges(index, e.detail);
+                    on:reset={() => {
+                      newRowForm[index]?.formApi?.reset();
+                      rows[index] = {};
                     }}
                   >
                     {#each richSteps as step, idx}
@@ -1476,12 +1503,13 @@
                           {#if slotFirst}
                             <slot />
                           {/if}
-                          {#each step.fields as field}
+                          {#each step.fields as field, idx}
                             {#if getComponentForField(field) && field.active}
                               <BlockComponent
                                 type={getComponentForField(field)}
                                 props={getPropsForField(field, index)}
                                 name={"SuperField-" + field?.field}
+                                order={idx}
                               />
                             {/if}
                           {/each}
@@ -1492,91 +1520,44 @@
                       </BlockComponent>
                     {/each}
                   </RowFormWrapper>
-                </BlockComponent>
+                </SuperForm>
               </div>
             {/each}
           {/if}
         </div>
+        <!-- New footer for special columns -->
+        {#if showFooter}
+          {#if formFooterText}
+            <div class="form-footer">
+              {processStringSync(formFooterText, $allContext)}
+            </div>
+          {:else if hasSpecialColumns && useAutocolumns && existingRows.length > 0 && (formattedUpdated || formattedCreated)}
+            <div class="form-footer">
+              {#if formattedUpdated}
+                <i class="ph ph-pencil-simple"></i>
+              {:else}
+                <i class="ph ph-plus-circle"></i>
+              {/if}
+              {formattedUpdated || formattedCreated} <i class="ph ph-user"></i>
+              {existingRows[0]?.updated_by ||
+                existingRows[0]?.created_by ||
+                "System"}
+            </div>
+          {/if}
+        {/if}
       </div>
     {/if}
   {/if}
 
   {#if loaded && empty && inBuilder}
-    <div class="empty">
-      {#if !nested}
-        <h3>Welcome to the Super Form</h3>
-        <div class="message">
-          <i class="ri-information-line" />
-          Please add some Fields to get Started
-        </div>
-      {:else}
-        <h3>
-          Subform Type - {subformType == "json"
-            ? "JSON Column"
-            : subformType == "embed"
-              ? "Embed Document"
-              : "Relationship"}
-        </h3>
-        <div class="form-types">
-          {#if subformType == "json"}
-            <div class="form-type">
-              JSON Columns
-              {#if outerFormJson}
-                {#each $outerFormJson as field}
-                  <div
-                    class="field"
-                    on:click={() => {
-                      _outerField = field;
-                      _subFormType = "json";
-                    }}
-                  >
-                    <i class="ri-braces-line" />
-                    {field}
-                  </div>
-                {/each}
-              {/if}
-            </div>
-          {:else if subformType == "embed"}
-            <div class="form-type">
-              Embed Document In
-              {#if outerFormEmbed}
-                {#each $outerFormEmbed as field}
-                  <div
-                    class="field"
-                    on:click={() => {
-                      _outerField = field;
-                      _subFormType = "embed";
-                    }}
-                  >
-                    {#if outerField == field}
-                      <i class="ri-check-line" />
-                    {:else}
-                      <i class="ri-braces-line" />
-                    {/if}
-
-                    {field}
-                    {#if outerField == field}
-                      - Select Schema to Embed
-                    {/if}
-                  </div>
-                {/each}
-              {/if}
-            </div>
-          {:else}
-            <div
-              class="form-type"
-              class:invalid={$dataSourceStore.type != "link"}
-            >
-              {#if $dataSourceStore.type != "link"}
-                Invalid Schema Selected
-              {:else}
-                Pick From Schema
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
+    <NewFormWizard
+      {nested}
+      {subformType}
+      outerFormJson={$outerFormJson}
+      outerFormEmbed={$outerFormEmbed}
+      dataSource={$dataSourceStore}
+      on:selectField={handleFieldSelect}
+    />
     <slot />
   {/if}
 </Block>
@@ -1587,107 +1568,23 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    border: 1px solid var(--spectrum-global-color-gray-300);
 
-    & > .form-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--spectrum-global-color-gray-300);
-      background-color: var(--spectrum-global-color-gray-100);
-      padding-left: 0.75rem;
-      padding-right: 0.5rem;
-      min-height: 3rem;
-      & > .form-title {
-        flex: auto;
-        display: flex;
-        flex-direction: column;
-
-        & > .title {
-          font-size: 14px;
-          display: flex;
-          align-items: center;
-          line-height: 2rem;
-          gap: 0.5rem;
-          text-transform: uppercase;
-          letter-spacing: 1.2px;
-          font-weight: 600;
-          color: var(--spectrum-global-color-gray-800);
-
-          &.small {
-            font-size: 13px;
-            line-height: 1rem;
-          }
-        }
-
-        & > .sub-title {
-          font-size: 13px;
-          color: var(--spectrum-global-color-gray-600);
-        }
-      }
-
-      & > .form-buttons {
-        display: flex;
-        gap: 0.25rem;
-      }
-    }
+    --spectrum-alias-border-color: var(--spectrum-global-color-gray-300);
+    overflow: hidden;
+    gap: 0.75rem;
 
     & > .form-body {
       flex: auto;
       display: flex;
       flex-direction: column;
       gap: 1rem;
-      padding: 0.75rem;
-      padding-bottom: 1rem;
     }
     &.form-field {
       border: unset;
-      &.quiet {
-        & > .form-header {
-          display: none;
-        }
-      }
-
-      & > .form-header {
-        min-height: 2.2rem;
-        margin: unset;
-        padding: unset;
-        border-bottom: unset;
-        background-color: unset;
-
-        &.multiRow {
-          border-bottom: unset;
-        }
-        & > .form-title {
-          flex: auto;
-          & > .title {
-            font-weight: 400;
-            color: var(--spectrum-global-color-gray-700);
-            font-size: 12px;
-            letter-spacing: 1px;
-          }
-        }
-      }
 
       & > .form-body {
         padding: unset;
         padding-top: 0.25rem;
-        border: unset;
-      }
-    }
-
-    &.quiet {
-      border: unset;
-      gap: 1rem;
-      & > .form-header {
-        background-color: unset;
-        border: unset;
-        padding: unset;
-        min-height: 2rem;
-      }
-
-      & > .form-body {
-        padding: unset;
         border: unset;
       }
     }
@@ -1698,6 +1595,10 @@
 
     &.multiStep {
       gap: 0.5rem;
+    }
+
+    &.loading {
+      min-height: "360px";
     }
   }
 
@@ -1731,66 +1632,21 @@
     align-items: center;
     font-size: 12px;
   }
-  .empty {
-    flex: auto;
+
+  .form-footer {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: transparent;
+    border-top: 1px solid var(--spectrum-global-color-gray-300);
+    font-size: 12px;
+    color: var(--spectrum-global-color-gray-600);
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.25rem;
-    padding: 1rem;
-    border: 1px dashed var(--spectrum-global-color-gray-400);
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.35rem;
 
-    & > h2,
-    h3 {
-      align-self: center;
-      margin-top: unset;
-    }
-
-    & > .message {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      justify-content: center;
-    }
-
-    & > .form-types {
-      padding: 0.5rem;
-      display: grid;
-      grid-template-columns: repeat(1, 1fr);
-      align-items: stretch;
-      gap: 1rem;
-
-      & > .form-type {
-        flex: auto;
-        display: flex;
-        flex-direction: column;
-        border: 1px solid var(--spectrum-global-color-gray-300);
-        background-color: var(--spectrum-global-color-gray-100);
-        border-radius: 4px;
-        gap: 0.5rem;
-        padding: 0.5rem;
-
-        &.invalid {
-          color: var(--spectrum-global-color-red-400);
-          border-color: var(--spectrum-global-color-red-500);
-        }
-
-        & > .field {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding-left: 0.5rem;
-          line-height: 2rem;
-          border: 1px solid var(--spectrum-global-color-gray-300);
-          background-color: var(--spectrum-global-color-gray-50);
-
-          &:hover {
-            background-color: var(--spectrum-global-color-blue-100);
-            border: 1px solid var(--spectrum-global-color-blue-500);
-            cursor: pointer;
-          }
-        }
-      }
+    &:hover {
+      color: var(--spectrum-global-color-gray-700);
     }
   }
 </style>

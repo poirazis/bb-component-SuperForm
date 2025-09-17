@@ -1,9 +1,11 @@
 <script>
-  import { getContext, createEventDispatcher, onMount } from "svelte";
-  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
+  import { getContext, createEventDispatcher } from "svelte";
+  import { SuperButton } from "@poirazis/supercomponents-shared";
 
   const { enrichButtonActions, builderStore } = getContext("sdk");
   const allContext = getContext("context");
+
+  const form = getContext("form");
 
   const dispatch = createEventDispatcher();
   export let disabled;
@@ -11,77 +13,116 @@
   export let inView;
   export let compact;
   export let quiet;
-
   export let isNew;
-
-  // Multi Step Forms
   export let richSteps;
-
   export let canDelete;
   export let canAdd;
   export let multiRow;
   export let rowActionButtons;
   export let rowActions;
-
   export let comp_id;
   export let row;
+  export let formObject;
+  export let isDeleted;
 
-  let activeStep = 1;
-  let initialized;
+  let activeStep;
+
   $: inBuilder = $builderStore.inBuilder;
-  $: isDeleted = row._deleted;
-  $: multiStep = richSteps.length > 1 || richSteps[0].title;
-  $: isDirty = row._isDirty;
+  $: multiStep = richSteps?.length > 1;
+  $: buttons = generateButtons(rowActions, rowActionButtons, dirty, activeStep);
+  $: formState = form?.formState;
+  $: dirty = $formState?.dirty;
+  $: unsub = form?.formState?.subscribe(
+    (v) => (activeStep = Math.max(v.currentStep - 1, 0))
+  );
+  $: onStepChange(activeStep);
 
-  const formClientApi = {
-    // Grab a reference to the wrapping form on initialization
-    form: getContext("form"),
-    init: (form) => {
-      let unsubscribe = form.formState.subscribe((value) => {
-        if (!initialized && !isNew) {
-          initialized = true;
-          return;
-        }
-        let values = unflattenObject(value.values);
-        formClientApi.valuesChanged(values, value.valid);
-        activeStep = value.currentStep;
-        dispatch("step-change", activeStep);
-      });
-    },
-    valuesChanged: (values, _isValid) => {
-      let new_row = { ...values, _isDirty: !isEmpty(values), _isValid };
-      dispatch("valuesChanged", new_row);
-    },
-  };
+  const generateButtons = () => {
+    const buttons = [];
 
-  const isEmpty = (obj) => {
-    if (obj && Object.keys(obj).length) {
-      return Object.values(obj).every((x) =>
-        typeof x == "object" ? isEmpty(x) : x === null || x === ""
+    // Add row action buttons
+    if (rowActionButtons?.length) {
+      buttons.push(
+        ...rowActionButtons.map(({ onClick, ...rest }) => ({
+          ...rest,
+          size: "S",
+          onClick: () => handleRowAction(onClick),
+        }))
       );
     }
-    return true;
-  };
 
-  const unflattenObject = (obj, delimiter = ".") => {
-    if (obj) {
-      return Object.keys(obj).reduce((res, k) => {
-        k.split(delimiter).reduce(
-          (acc, e, i, keys) =>
-            acc[e] ||
-            (acc[e] = isNaN(Number(keys[i + 1]))
-              ? keys.length - 1 === i
-                ? obj[k]
-                : {}
-              : []),
-          res
-        );
-        return res;
-      }, {});
+    // Add row actions
+    if (rowActions) {
+      buttons.push(
+        ...Object.entries(rowActions).map(([name, action]) => ({
+          icon: "ri-flashlight-line",
+          type: "primary",
+          quiet: true,
+          size: "S",
+          text: action.name,
+        }))
+      );
     }
-  };
 
-  export const formObject = formClientApi.form;
+    // Add action buttons when not in view
+    if (!inView) {
+      if (isDeleted) {
+        buttons.push({
+          icon: "ri-arrow-go-back-fill",
+          size: "S",
+          quiet: true,
+          onClick: onDelete,
+        });
+      } else if (canDelete) {
+        buttons.push({
+          icon: "ri-delete-bin-2-line",
+          type: "warning",
+          size: "S",
+          disabled,
+          fillOnHover: true,
+          quiet: true,
+          onClick: onDelete,
+        });
+      }
+
+      if (dirty) {
+        buttons.push({
+          icon: "ri-refresh-line",
+          size: "S",
+          type: "secondary",
+          quiet: true,
+          disabled,
+          fillOnHover: true,
+          onClick: onReset,
+        });
+      }
+
+      if (actionsMode === "individual") {
+        buttons.push({
+          icon: "ri-save-line",
+          disabled,
+          size: "S",
+          type: "primary",
+          quiet: true,
+          onClick: onSave,
+        });
+      }
+
+      if (canAdd) {
+        buttons.push({
+          icon: "ri-add-line",
+          size: "S",
+          type: "primary",
+          disabled: !canAdd || disabled,
+          fillOnHover: true,
+          quiet: true,
+          onClick: () => dispatch("add-row", {}),
+        });
+      }
+    }
+
+    return buttons;
+  };
 
   const onDelete = () => {
     dispatch("delete", {});
@@ -89,6 +130,10 @@
 
   const onSave = () => {
     dispatch("save", {});
+  };
+
+  const onReset = () => {
+    dispatch("reset", {});
   };
 
   const handleRowAction = async (event) => {
@@ -101,16 +146,16 @@
     await cmd?.();
   };
 
-  onMount(() => {
-    formClientApi.init(formClientApi.form);
-  });
+  const onStepChange = (step) => {
+    dispatch("changeStep", step);
+  };
 </script>
 
 <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-mouse-events-have-key-events -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
-<div class="row-wrapper" class:multiRow class:isDirty class:compact>
+<div class="row-wrapper" class:multiRow class:dirty class:compact>
   {#if multiRow || multiStep}
     <div class="row-header" class:multiStep class:isNew>
       {#if multiStep}
@@ -122,12 +167,12 @@
           {#each richSteps as { title }, idx}
             <div
               class="tab"
-              class:complete={activeStep - 1 > idx}
-              class:active={idx == activeStep - 1}
+              class:complete={activeStep > idx}
+              class:active={idx == activeStep}
               on:click={() => {
                 if (inBuilder) return;
-                if (formObject.formApi.validate()) {
-                  formObject.formApi.setStep(idx + 1);
+                if (form.formApi.validate()) {
+                  form.formApi.setStep(idx + 1);
                 }
               }}
             >
@@ -136,73 +181,11 @@
           {/each}
         </div>
       {/if}
-      <!-- svelte-ignore a11y-click-events-have-key-events -->
-
-      {#if multiRow}
+      {#if multiRow && buttons.length}
         <span class="row-buttons">
-          {#if rowActionButtons?.length}
-            {#each rowActionButtons as { onClick, ...rest }}
-              <SuperButton
-                {...rest}
-                size="S"
-                on:click={handleRowAction(onClick)}
-              />
-            {/each}
-          {/if}
-
-          {#if rowActions}
-            {#each Object.entries(rowActions) as [name, action]}
-              <SuperButton
-                icon="ri-flashlight-line"
-                type="primary"
-                quiet
-                size="S"
-                text={action.name}
-              />
-            {/each}
-          {/if}
-
-          {#if !inView}
-            {#if isDeleted}
-              <SuperButton
-                icon={"ri-arrow-go-back-fill"}
-                size="S"
-                on:click={onDelete}
-                quiet
-              />
-            {:else if canDelete}
-              <SuperButton
-                icon={"ri-delete-bin-2-line"}
-                type="warning"
-                size="S"
-                {disabled}
-                fillOnHover
-                quiet
-                on:click={onDelete}
-              />
-            {/if}
-            {#if actionsMode == "individual"}
-              <SuperButton
-                icon={"ri-save-line"}
-                {disabled}
-                size="S"
-                type="primary"
-                on:click={onSave}
-                quiet
-              />
-            {/if}
-            {#if canAdd}
-              <SuperButton
-                icon={"ri-add-line"}
-                size="S"
-                type="primary"
-                disabled={!canAdd || disabled}
-                fillOnHover
-                quiet
-                on:click={() => dispatch("add-row", {})}
-              />
-            {/if}
-          {/if}
+          {#each buttons as button}
+            <SuperButton {...button} on:click={button.onClick} />
+          {/each}
         </span>
       {/if}
     </div>
@@ -239,7 +222,7 @@
         border: 1px solid var(--spectrum-global-color-gray-200);
       }
 
-      &.isDirty {
+      &.dirty {
         border: 1px solid var(--spectrum-global-color-gray-300) !important;
         background-color: var(--spectrum-global-color-gray-100);
       }
@@ -253,6 +236,8 @@
         justify-content: space-between;
         align-items: flex-start;
         margin-top: 8px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid var(--spectrum-global-color-gray-300);
 
         &.isNew {
           justify-content: center;
@@ -273,12 +258,6 @@
 
     & > .row-body {
       flex: auto;
-
-      &.multiStep {
-        flex: auto;
-        padding: 1rem;
-        border: 1px solid var(--spectrum-global-color-gray-300);
-      }
 
       &.quiet {
         padding: unset;
