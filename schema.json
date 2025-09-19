@@ -2,8 +2,8 @@
   "type": "component",
   "metadata": {},
   "schema": {
-    "name": "bb-component-SuperForm",
-    "friendlyName": "Super Form",
+    "name": "bb-component-SuperFormPro",
+    "friendlyName": "Super Form Pro",
     "description": "A Form component for Budibase",
     "styles": ["size", "padding", "border", "background"],
     "icon": "Form",
@@ -15,13 +15,7 @@
       {
         "type": "ValidateForm"
       },
-      {
-        "type": "ClearForm"
-      },
-      {
-        "type": "UpdateFieldValue",
-        "suffix": "form"
-      },
+
       {
         "type": "ScrollTo",
         "suffix": "form"
@@ -67,8 +61,7 @@
         ]
       },
       {
-        "type": "form",
-        "suffix": "form"
+        "type": "form"
       },
       {
         "type": "schema"
@@ -80,20 +73,6 @@
         "key": "nested",
         "label": "Sub Form",
         "hidden": true
-      },
-      {
-        "type": "text",
-        "key": "formTitle",
-        "label": "Title",
-        "placeholder": "Auto",
-        "nested": true
-      },
-      {
-        "type": "text",
-        "key": "formSubtitle",
-        "label": "Subtitle",
-        "nested": true,
-        "resetOn": ["dataSource"]
       },
       {
         "type": "select",
@@ -109,38 +88,16 @@
         "defaultValue": "embed"
       },
       {
-        "type": "field/json",
+        "type": "text",
         "key": "outerField",
         "label": "Field",
         "resetOn": ["nested", "subformType"],
         "hidden": true
       },
       {
-        "type": "field/link",
-        "key": "outerLinkField",
-        "label": "Field",
-        "resetOn": ["nested", "subformType"],
-        "hidden": true
-      },
-      {
-        "type": "schema",
-        "key": "dataSource",
-        "resetOn": ["nested", "subformType"],
-        "dependsOn": {
-          "setting": "subformType",
-          "value": "json",
-          "invert": true
-        },
-        "label": "Data",
-        "defaultValue": {
-          "name": "Custom",
-          "label": "Custom"
-        }
-      },
-      {
         "type": "select",
         "key": "actionType",
-        "label": "Action Type",
+        "label": "Type",
         "defaultValue": "create",
         "showInBar": true,
         "dependsOn": {
@@ -155,11 +112,34 @@
         ]
       },
       {
+        "type": "text",
+        "key": "outerLinkField",
+        "label": "Field",
+        "resetOn": ["nested", "subformType"],
+        "defaultValue": null,
+        "hidden": true
+      },
+      {
+        "type": "schema",
+        "key": "dataSource",
+        "resetOn": ["nested", "subformType"],
+        "dependsOn": {
+          "setting": "subformType",
+          "value": "json",
+          "invert": true
+        },
+        "label": "Schema",
+        "defaultValue": {
+          "name": "Custom",
+          "label": "Custom"
+        }
+      },
+      {
         "type": "number",
         "key": "formColumns",
         "label": "Columns",
         "min": 1,
-        "defaultValue": 2
+        "defaultValue": 3
       },
       {
         "type": "boolean",
@@ -199,7 +179,8 @@
         "key": "canEdit",
         "label": "Can Edit",
         "resetOn": "actionType",
-        "dependsOn": { "setting": "actionType", "value": "view" }
+        "dependsOn": { "setting": "actionType", "value": "view" },
+        "defaultValue": true
       },
       {
         "type": "boolean",
@@ -209,22 +190,11 @@
       },
       {
         "type": "boolean",
-        "key": "extendActions",
-        "label": "Extend Actions"
+        "key": "useAutocolumns",
+        "label": "Auto Columns",
+        "defaultValue": true
       },
-      {
-        "type": "boolean",
-        "key": "hideDefaultActions",
-        "label": "Hide Default",
-        "dependsOn": "extendActions"
-      },
-      {
-        "type": "buttonConfiguration",
-        "key": "formButtons",
-        "wide": true,
-        "nested": true,
-        "dependsOn": "extendActions"
-      },
+
       {
         "section": true,
         "name": "Initial Data",
@@ -351,7 +321,73 @@
       },
       {
         "section": true,
-        "name": "Form Fields",
+        "name": "Header",
+        "collapsed": true,
+        "settings": [
+          {
+            "type": "boolean",
+            "key": "showHeader",
+            "label": "Show Header",
+            "defaultValue": true
+          },
+          {
+            "type": "text",
+            "key": "formTitle",
+            "label": "Title",
+            "placeholder": "Auto",
+            "resetOn": ["dataSource"],
+            "nested": true
+          },
+          {
+            "type": "text",
+            "key": "formSubtitle",
+            "label": "Subtitle",
+            "nested": true,
+            "resetOn": ["dataSource"]
+          },
+          {
+            "type": "boolean",
+            "key": "extendActions",
+            "label": "Extend Actions"
+          },
+          {
+            "type": "boolean",
+            "key": "hideDefaultActions",
+            "label": "Hide Default",
+            "dependsOn": "extendActions"
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "formButtons",
+            "wide": true,
+            "nested": true,
+            "dependsOn": "extendActions"
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Footer",
+        "collapsed": true,
+        "settings": [
+          {
+            "type": "boolean",
+            "key": "showFooter",
+            "label": "Show Footer",
+            "defaultValue": true
+          },
+          {
+            "type": "text",
+            "key": "formFooterText",
+            "label": "Text",
+            "nested": true,
+            "placeholder": "e.g. 'Fields marked with * are required'"
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Fields",
         "dependsOn": { "setting": "multiStep", "value": true, "invert": true },
         "settings": [
           {
@@ -404,6 +440,7 @@
       },
       {
         "section": true,
+        "collapsed": true,
         "name": "Events",
         "dependsOn": {
           "setting": "hideDefaultActions",
@@ -427,105 +464,172 @@
         ]
       },
       {
+        "section": true,
         "tag": "style",
-        "type": "select",
-        "label": "Label Position",
-        "key": "labelPosition",
-        "showInBar": true,
-        "barStyle": "buttons",
-        "defaultValue": "fieldGroup",
-        "options": [
+        "name": "Form Settings",
+        "settings": [
           {
-            "label": "Disabled",
-            "value": false,
-            "barIcon": "Cancel",
-            "barTitle": "Disabled"
+            "type": "select",
+            "label": "Flex Mode",
+            "showLabel": false,
+            "key": "flex",
+            "showInBar": true,
+            "barStyle": "buttons",
+            "options": [
+              {
+                "label": "Shrink",
+                "value": "none",
+                "barIcon": "Minimize",
+                "barTitle": "Shrink container"
+              },
+              {
+                "label": "Grow",
+                "value": "auto",
+                "barIcon": "Maximize",
+                "barTitle": "Grow container"
+              }
+            ],
+            "defaultValue": "none"
           },
           {
-            "label": "Auto",
-            "value": "fieldGroup",
-            "barIcon": "Group",
-            "barTitle": "Field Group"
+            "type": "select",
+            "label": "Components",
+            "key": "component_type",
+            "options": [
+              {
+                "label": "Super Components",
+                "value": "super_components"
+              },
+              {
+                "label": "BB Components",
+                "value": "budibase_components"
+              }
+            ],
+            "defaultValue": "super_components"
           },
           {
-            "label": "Above",
-            "value": "above",
-            "barIcon": "MarginTop",
-            "barTitle": "Above"
+            "tag": "style",
+            "type": "select",
+            "label": "Button Position",
+            "key": "buttonPosition",
+            "barStyle": "buttons",
+            "defaultValue": "top",
+            "options": [
+              {
+                "label": "Top",
+                "value": "top",
+                "barIcon": "MarginTop",
+                "barTitle": "Top"
+              },
+              {
+                "label": "Bottom",
+                "value": "bottom",
+                "barIcon": "MarginBottom",
+                "barTitle": "Bottom"
+              }
+            ]
           },
           {
-            "label": "Left",
-            "value": "left",
-            "barIcon": "MarginLeft",
-            "barTitle": "Left"
+            "type": "text",
+            "key": "entitySingular",
+            "label": "Singular Name",
+            "resetOn": ["dataSource"],
+            "placeholder": "row"
+          },
+          {
+            "type": "text",
+            "key": "entityPlural",
+            "label": "Plural Name",
+            "resetOn": ["dataSource"],
+            "placeholder": "rows"
+          },
+          {
+            "type": "boolean",
+            "key": "slotFirst",
+            "label": "Slot First"
+          },
+          {
+            "type": "number",
+            "key": "slotSpan",
+            "label": "Slot Span",
+            "defaultValue": 1,
+            "min": 1,
+            "max": 12
           }
         ]
       },
       {
+        "section": true,
         "tag": "style",
-        "type": "text",
-        "key": "labelTemplate",
-        "label": "Label Template",
-        "placeholder": "{{ field }}",
-        "nested": true
-      },
-      {
-        "tag": "style",
-        "type": "text",
-        "key": "entitySingular",
-        "label": "Singular Name",
-        "resetOn": ["dataSource"],
-        "placeholder": "row"
-      },
-      {
-        "tag": "style",
-        "type": "text",
-        "key": "entityPlural",
-        "label": "Plural Name",
-        "resetOn": ["dataSource"],
-        "placeholder": "rows"
-      },
-      {
-        "tag": "style",
-        "type": "icon",
-        "key": "titleIcon",
-        "label": "Title Icon",
-        "resetOn": ["dataSource"]
-      },
-      {
-        "tag": "style",
-        "type": "select",
-        "key": "relViewMode",
-        "label": "Relationships",
-        "options": [
-          { "label": "Pills", "value": "pills" },
-          { "label": "Text", "value": "text" }
-        ],
-        "defaultValue": "pills"
-      },
-      {
-        "tag": "style",
-        "type": "select",
-        "key": "optionsViewMode",
-        "label": "Options",
-        "options": [
-          { "label": "Color Text", "value": "colorText" },
-          { "label": "Pills", "value": "pills" },
-          { "label": "Text", "value": "text" }
-        ],
-        "defaultValue": "colorText"
-      },
-      {
-        "tag": "style",
-        "type": "boolean",
-        "key": "quiet",
-        "label": "Quiet"
-      },
-      {
-        "tag": "style",
-        "type": "boolean",
-        "key": "slotFirst",
-        "label": "Slot First"
+        "name": "Field Settings",
+        "settings": [
+          {
+            "tag": "style",
+            "type": "select",
+            "label": "Label Position",
+            "key": "labelPosition",
+            "showInBar": true,
+            "barStyle": "buttons",
+            "defaultValue": "fieldGroup",
+            "options": [
+              {
+                "label": "Disabled",
+                "value": false,
+                "barIcon": "Cancel",
+                "barTitle": "Disabled"
+              },
+              {
+                "label": "Auto",
+                "value": "fieldGroup",
+                "barIcon": "Group",
+                "barTitle": "Field Group"
+              },
+              {
+                "label": "Above",
+                "value": "above",
+                "barIcon": "MarginTop",
+                "barTitle": "Above"
+              },
+              {
+                "label": "Left",
+                "value": "left",
+                "barIcon": "MarginLeft",
+                "barTitle": "Left"
+              }
+            ]
+          },
+          {
+            "tag": "style",
+            "type": "text",
+            "key": "labelTemplate",
+            "label": "Label Template",
+            "placeholder": "{{ field }}",
+            "nested": true
+          },
+          {
+            "tag": "style",
+            "type": "select",
+            "key": "relViewMode",
+            "label": "Relationships",
+            "options": [
+              { "label": "Pills", "value": "pills" },
+              { "label": "Text", "value": "text" }
+            ],
+            "defaultValue": "pills"
+          },
+          {
+            "tag": "style",
+            "type": "select",
+            "key": "optionsViewMode",
+            "label": "Options",
+            "options": [
+              { "label": "Color Text", "value": "colorText" },
+              { "label": "Pills", "value": "pills" },
+              { "label": "Text", "value": "text" }
+            ],
+            "defaultValue": "colorText"
+          }
+        ]
       }
     ]
   }
