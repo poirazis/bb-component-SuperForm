@@ -367,7 +367,7 @@
     "@parcel/watcher-win32-x64" "2.5.1"
 
 "@poirazis/supercomponents-shared@file:../../shared":
-  version "1.0.18"
+  version "1.0.26"
   resolved "file:../../shared"
   dependencies:
     "@budibase/types" "^2.33.14"

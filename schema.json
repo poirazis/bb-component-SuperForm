@@ -29,7 +29,7 @@
         "type": "select",
         "label": "Type",
         "key": "actionType",
-        "options": ["Create", "Update"],
+        "options": ["View", "Create", "Update"],
         "defaultValue": "Create"
       },
       {
